@@ -4,7 +4,8 @@ import {
   BrowserRouter,
   Routes,
   Route,
-  Navigate
+  Navigate,
+  Outlet
 } from 'react-router-dom';
 
 import { ThemeProvider } from './context/ThemeContext';
@@ -16,6 +17,7 @@ import { FamilyProvider } from './context/FamilyContext';
 import Navbar from './components/common/Navbar';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import App3DBackground from './components/common/App3DBackground';
 
 import UserDashboardLayout from './components/layout/UserDashboardLayout';
 import DoctorDashboardLayout from './components/layout/DoctorDashboardLayout';
@@ -115,6 +117,23 @@ const PageFallbackLoader = () => (
 );
 
 // --------------------------------------------------
+// Public & Authentication Layout with 3D Depth
+// --------------------------------------------------
+
+function PublicLayout({ showNavbar = true }) {
+  return (
+    <div className="relative min-h-screen flex flex-col bg-slate-50 dark:bg-[#1F150E] text-slate-900 dark:text-slate-100 overflow-x-hidden">
+      {/* Universal 3D Background with perspective horizon and floating volumetric orbs */}
+      <App3DBackground fixed showVideo />
+      {showNavbar && <Navbar />}
+      <div className="relative z-10 flex-1 flex flex-col">
+        <Outlet />
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------
 // Application routes
 // --------------------------------------------------
 
@@ -123,74 +142,45 @@ function AppRoutes() {
     <Suspense fallback={<PageFallbackLoader />}>
       <Routes>
 
-        {/* Public landing pages */}
+        {/* Public landing pages with 3D Background */}
+        <Route element={<PublicLayout showNavbar={true} />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/explore" element={<ExplorePage />} />
+          <Route path="/explore/:id" element={<DiseaseDetailPage />} />
+          <Route path="/about" element={<AboutPage />} />
+        </Route>
 
-        <Route
-          path="/"
-          element={
-            <>
-              <Navbar />
-              <HomePage />
-            </>
-          }
-        />
+        {/* Public authentication & portal access pages with 3D Background */}
+        <Route element={<PublicLayout showNavbar={false} />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/account-setup" element={<AccountSetupPage />} />
 
-        <Route
-          path="/home"
-          element={
-            <>
-              <Navbar />
-              <HomePage />
-            </>
-          }
-        />
-
-        <Route
-          path="/explore"
-          element={
-            <>
-              <Navbar />
-              <ExplorePage />
-            </>
-          }
-        />
-
-        <Route
-          path="/explore/:id"
-          element={
-            <>
-              <Navbar />
-              <DiseaseDetailPage />
-            </>
-          }
-        />
-
-        <Route
-          path="/about"
-          element={
-            <>
-              <Navbar />
-              <AboutPage />
-            </>
-          }
-        />
-
-        {/* Authentication */}
-
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/account-setup" element={<AccountSetupPage />} />
-
-        {/* Doctor authentication */}
-
-        <Route path="/doctor/login" element={<DoctorLoginPage />} />
-        <Route path="/doctor/register" element={<DoctorRegisterPage />} />
-
-        <Route
-          path="/doctor/forgot-password"
-          element={<DoctorForgotPasswordPage />}
-        />
+          <Route path="/doctor/login" element={<DoctorLoginPage />} />
+          <Route path="/doctor/register" element={<DoctorRegisterPage />} />
+          <Route
+            path="/doctor/forgot-password"
+            element={<DoctorForgotPasswordPage />}
+          />
+          <Route
+            path="/doctor/pending"
+            element={
+              <ProtectedRoute allowedRoles={['DOCTOR_PENDING']}>
+                <DoctorPendingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/suspended"
+            element={
+              <ProtectedRoute allowedRoles={['DOCTOR_SUSPENDED']}>
+                <DoctorSuspendedPage />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
 
         {/* Normal user dashboard */}
 
@@ -218,29 +208,7 @@ function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
-        {/* Pending doctor */}
-
-        <Route
-          path="/doctor/pending"
-          element={
-            <ProtectedRoute allowedRoles={['DOCTOR_PENDING']}>
-              <DoctorPendingPage />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Suspended doctor */}
-
-        <Route
-          path="/doctor/suspended"
-          element={
-            <ProtectedRoute allowedRoles={['DOCTOR_SUSPENDED']}>
-              <DoctorSuspendedPage />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Verified doctor dashboard */}
+{/* Verified doctor dashboard only */}
 
         <Route
           path="/doctor"

@@ -67,6 +67,7 @@ if (!registeredUser) {
   throw new Error('Registration failed. Check the error message.');
 }
 
+sessionStorage.setItem('biotrajectory_patient_splash', 'true');
 navigate('/dashboard', { replace: true });
     } catch (err) {
   setError(err.message || 'Failed to create account.');

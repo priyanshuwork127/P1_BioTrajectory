@@ -14,10 +14,12 @@ import {
   X,
   Mail,
   Calendar,
-  Key
+  Key,
+  UserPlus
 } from "lucide-react";
 import { useLanguage } from "../../context/LanguageContext";
 import adminDashboardService from "../../services/adminDashboardService";
+import AddAdminModal from "../../components/admin/AddAdminModal";
 
 export default function AdminUsersPage() {
   const { t, isHindi } = useLanguage();
@@ -28,6 +30,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg) => {
@@ -149,14 +152,24 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => loadUsers(true)}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#251A11] text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-100 dark:hover:bg-slate-800/80 disabled:opacity-50 cursor-pointer active:scale-95 transition-all shadow-xs self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-cyan-500" : ""}`} />
-          <span>{loading ? (isHindi ? 'रीफ्रेश...' : 'Refreshing...') : (isHindi ? 'रीफ्रेश' : 'Refresh Directory')}</span>
-        </button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold active:scale-95 transition-all shadow-md shadow-purple-600/25 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{isHindi ? '+ नया व्यवस्थापक' : '+ Add Administrator'}</span>
+          </button>
+
+          <button
+            onClick={() => loadUsers(true)}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#251A11] text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-100 dark:hover:bg-slate-800/80 disabled:opacity-50 cursor-pointer active:scale-95 transition-all shadow-xs"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-cyan-500" : ""}`} />
+            <span>{loading ? (isHindi ? 'रीफ्रेश...' : 'Refreshing...') : (isHindi ? 'रीफ्रेश' : 'Refresh')}</span>
+          </button>
+        </div>
       </div>
 
       {/* Privacy Notice Banner */}
@@ -406,7 +419,34 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              {selectedUser.role !== 'ADMIN' ? (
+                <button
+                  onClick={() => {
+                    adminDashboardService.promoteUserToAdmin(selectedUser.uid);
+                    showToast(`${selectedUser.name} promoted to Administrator role.`);
+                    setModalOpen(false);
+                    loadUsers();
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{isHindi ? 'व्यवस्थापक बनाएं' : 'Promote to Admin'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    adminDashboardService.revokeAdmin(selectedUser.uid);
+                    showToast(`${selectedUser.name} administrator access revoked.`);
+                    setModalOpen(false);
+                    loadUsers();
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer transition-all"
+                >
+                  <span>{isHindi ? 'व्यवस्थापक पद हटाएं' : 'Revoke Admin Role'}</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setModalOpen(false)}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 cursor-pointer"
@@ -417,6 +457,17 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Add Administrator Modal */}
+      <AddAdminModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        existingUsers={users}
+        onAdminAdded={(admin, msg) => {
+          showToast(msg || `Administrator ${admin.name} registered.`);
+          loadUsers();
+        }}
+      />
     </div>
   );
 }

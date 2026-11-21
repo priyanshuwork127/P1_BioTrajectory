@@ -84,9 +84,10 @@ export default function Navbar() {
               <div className="flex items-center gap-2.5">
                 <Link
                   to={targetDashboard}
-                  className="flex items-center gap-2 px-4 py-2 text-[14px] font-bold rounded-xl bg-cyan-500/15 border border-cyan-500/35 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/25 transition-all shadow-xs cursor-pointer"
+                  role="button"
+                  className="flex items-center gap-2 px-4 py-2 text-[14px] font-bold rounded-xl btn-3d-primary cursor-pointer shadow-xs"
                 >
-                  <User className="w-4 h-4 text-cyan-500" />
+                  <User className="w-4 h-4" />
                   <span>{t('nav.dashboard', {}, 'Dashboard')}</span>
                 </Link>
 
@@ -108,7 +109,8 @@ export default function Navbar() {
                 </Link>
                 <Link
                   to="/register"
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[14px] font-bold text-slate-950 bg-gradient-to-r from-cyan-400 via-cyan-300 to-blue-500 hover:from-cyan-300 hover:to-blue-400 transition-all shadow-sm active:scale-95"
+                  role="button"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[14px] font-bold btn-3d-primary cursor-pointer"
                 >
                   <span>{t('nav.getStarted', {}, 'Get Started')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />

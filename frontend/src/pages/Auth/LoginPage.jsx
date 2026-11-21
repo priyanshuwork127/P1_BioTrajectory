@@ -62,6 +62,14 @@ export default function LoginPage() {
       const user = await login(demoUser.email, demoUser.password, true);
 
       if (user) {
+        if (user.role === USER_ROLES.ADMIN) {
+          sessionStorage.setItem('biotrajectory_admin_splash', 'true');
+        } else if (user.role === USER_ROLES.DOCTOR || user.role === USER_ROLES.DOCTOR_PENDING || user.role === USER_ROLES.DOCTOR_SUSPENDED) {
+          sessionStorage.setItem('biotrajectory_doctor_splash', 'true');
+        } else {
+          sessionStorage.setItem('biotrajectory_patient_splash', 'true');
+        }
+
         const roleLabel =
           user.role === USER_ROLES.ADMIN
             ? 'Administrator'
@@ -102,6 +110,14 @@ export default function LoginPage() {
       const user = await login(email, password, rememberMe);
 
       if (user) {
+        if (user.role === USER_ROLES.ADMIN) {
+          sessionStorage.setItem('biotrajectory_admin_splash', 'true');
+        } else if (user.role === USER_ROLES.DOCTOR || user.role === USER_ROLES.DOCTOR_PENDING || user.role === USER_ROLES.DOCTOR_SUSPENDED) {
+          sessionStorage.setItem('biotrajectory_doctor_splash', 'true');
+        } else {
+          sessionStorage.setItem('biotrajectory_patient_splash', 'true');
+        }
+
         const roleLabel =
           user.role === USER_ROLES.ADMIN
             ? 'Administrator'

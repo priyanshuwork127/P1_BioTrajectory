@@ -283,3 +283,5 @@ export function saveStoredDoctorAppointments() {
     "Local appointment storage has been removed. Use Firestore appointment methods instead."
   );
 }
+
+export default appointmentService;

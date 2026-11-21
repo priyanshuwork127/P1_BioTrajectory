@@ -9,7 +9,6 @@ import {
   AlertCircle,
   BarChart3,
   MessageSquare,
-  Activity,
   Cpu,
   Lock,
   ChevronLeft,
@@ -20,7 +19,9 @@ import {
   ShieldAlert,
   FolderHeart,
   FileText,
-  Key
+  Key,
+  UserPlus,
+  CheckCircle2
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -28,10 +29,18 @@ import { useLanguage } from '../../context/LanguageContext';
 import ThemeToggle from '../common/ThemeToggle';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import BrandLogo from '../common/BrandLogo';
+import AdminHeartSplashScreen from '../admin/AdminHeartSplashScreen';
+import AddAdminModal from '../admin/AddAdminModal';
+import App3DBackground from '../common/App3DBackground';
 
 export default function AdminDashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSplashScreen, setShowSplashScreen] = useState(() => {
+    return sessionStorage.getItem('biotrajectory_admin_splash') === 'true';
+  });
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -47,7 +56,6 @@ export default function AdminDashboardLayout() {
   const adminNavItems = [
     { label: t('admin.overview', {}, 'Overview'), path: '/admin/dashboard', icon: Shield },
     { label: t('admin.userAccounts', {}, 'User Accounts'), path: '/admin/users', icon: Users },
-    { label: isHindi ? 'भूमिकाएं व अनुमतियां' : 'Roles & Permissions', path: '/admin/roles', icon: Key },
     { label: t('admin.doctorVerification', {}, 'Doctor Verification'), path: '/admin/verification', icon: Shield },
     { label: t('admin.patientManagement', {}, 'Patient Management'), path: '/admin/patients', icon: Users },
     { label: isHindi ? 'मरीज मेडिकल रिकॉर्ड्स' : 'Medical Records', path: '/admin/medical-records', icon: FolderHeart },
@@ -198,7 +206,11 @@ export default function AdminDashboardLayout() {
       </aside>
 
       {/* 2. ADMIN MAIN VIEWPORT */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+        
+        {/* 3D Atmospheric Background */}
+        <App3DBackground />
+        
 
         {/* Admin Header */}
         <header className="h-20 px-6 sm:px-8 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-[#251A11]/80 backdrop-blur-xl flex items-center justify-between shrink-0 z-20">
@@ -275,6 +287,17 @@ export default function AdminDashboardLayout() {
               </span>
             </Link>
 
+
+            {/* 5. ADD ADMIN BUTTON (BORDERLESS) */}
+            <button
+              onClick={() => setIsAddAdminModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer active:scale-95 whitespace-nowrap bg-purple-600 hover:bg-purple-500 text-white shadow-xs"
+              title={isHindi ? 'नया व्यवस्थापक जोड़ें' : 'Add New Administrator'}
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{isHindi ? '+ व्यवस्थापक' : '+ Add Admin'}</span>
+            </button>
+
             <LanguageSwitcher compact />
             <ThemeToggle />
 
@@ -290,6 +313,34 @@ export default function AdminDashboardLayout() {
             </div>
           </div>
         </header>
+
+        {/* Toast Notification */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 rounded-2xl bg-purple-600 text-white font-bold text-sm shadow-2xl animate-fade-in">
+            <CheckCircle2 className="w-5 h-5" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* 3D Holographic Heart Splash Screen */}
+        {showSplashScreen && (
+          <AdminHeartSplashScreen
+            onComplete={() => {
+              setShowSplashScreen(false);
+              sessionStorage.removeItem('biotrajectory_admin_splash');
+            }}
+          />
+        )}
+
+        {/* Add Administrator Modal */}
+        <AddAdminModal
+          isOpen={isAddAdminModalOpen}
+          onClose={() => setIsAddAdminModalOpen(false)}
+          onAdminAdded={(newAdmin, message) => {
+            setToastMessage(message || 'Administrator successfully registered.');
+            setTimeout(() => setToastMessage(null), 3500);
+          }}
+        />
 
         {/* Mobile Drawer */}
         {mobileOpen && (
@@ -318,7 +369,7 @@ export default function AdminDashboardLayout() {
         )}
 
         {/* Content Outlet */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 bg-[#F6F0E4] dark:bg-[#1F150E]">
+        <main className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 relative z-10">
           <Outlet />
         </main>
       </div>
