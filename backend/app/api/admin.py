@@ -317,3 +317,82 @@ async def get_admin_users(
             status_code=503,
             detail="User profiles are temporarily unavailable.",
         )
+
+
+class AddAdminRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., min_length=5, max_length=150)
+    role_tier: Optional[str] = Field("SUPER_ADMIN", max_length=50)
+    temporary_password: Optional[str] = None
+
+
+@router.post("/add-admin")
+async def add_admin(
+    payload: AddAdminRequest,
+    current_user: Dict[str, Any] = Depends(require_user_role("ADMIN")),
+):
+    """
+    Provision a new administrator account with ADMIN custom claims.
+    """
+    try:
+        if initialize_firebase_admin():
+            try:
+                user_record = auth.get_user_by_email(payload.email)
+            except auth.UserNotFoundError:
+                user_record = auth.create_user(
+                    email=payload.email,
+                    display_name=payload.name,
+                    password=payload.temporary_password or "BioTrajectoryAdmin@2026",
+                )
+
+            auth.set_custom_user_claims(user_record.uid, {
+                "role": "ADMIN",
+                "roleTier": payload.role_tier,
+                "grantedBy": current_user.get("uid", "root-admin"),
+                "grantedAt": datetime.now(timezone.utc).isoformat()
+            })
+
+            db = get_firestore()
+            db.collection("users").document(user_record.uid).set({
+                "name": payload.name,
+                "email": payload.email,
+                "role": "ADMIN",
+                "roleTier": payload.role_tier,
+                "status": "ACTIVE",
+                "createdAt": datetime.now(timezone.utc).isoformat(),
+            }, merge=True)
+
+            return {
+                "success": True,
+                "message": f"Administrator {payload.name} successfully provisioned.",
+                "admin": {
+                    "uid": user_record.uid,
+                    "name": payload.name,
+                    "email": payload.email,
+                    "role": "ADMIN",
+                    "roleTier": payload.role_tier,
+                    "status": "ACTIVE",
+                    "createdAt": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        else:
+            demo_uid = f"admin-{int(datetime.now(timezone.utc).timestamp())}"
+            return {
+                "success": True,
+                "message": f"Administrator {payload.name} provisioned in demo mode.",
+                "admin": {
+                    "uid": demo_uid,
+                    "name": payload.name,
+                    "email": payload.email,
+                    "role": "ADMIN",
+                    "roleTier": payload.role_tier,
+                    "status": "ACTIVE",
+                    "createdAt": datetime.now(timezone.utc).isoformat()
+                }
+            }
+    except Exception as e:
+        logger.exception("Failed to provision admin account.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add administrator: {str(e)}"
+        )

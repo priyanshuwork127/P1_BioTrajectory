@@ -31,6 +31,8 @@ import { familyHealthService } from '../../services/familyHealthService';
 import ThemeToggle from '../common/ThemeToggle';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import BrandLogo from '../common/BrandLogo';
+import HeartSplashScreen from '../common/HeartSplashScreen';
+import UserDashboardBackground from '../user/UserDashboardBackground';
 
 export default function UserDashboardLayout() {
   const { currentUser, healthProfile, logout } = useAuth();
@@ -45,6 +47,9 @@ export default function UserDashboardLayout() {
   const [patientAvatar, setPatientAvatar] = useState(() => getPatientAvatar());
   const [pendingFamilyApprovals, setPendingFamilyApprovals] = useState(0);
   const [activeFamilyMember, setActiveFamilyMember] = useState(null);
+  const [showSplashScreen, setShowSplashScreen] = useState(() => {
+    return sessionStorage.getItem('biotrajectory_patient_splash') === 'true';
+  });
 
   useEffect(() => {
     const unsub = subscribeToAvatarChanges((newAvatar) => {
@@ -233,7 +238,10 @@ export default function UserDashboardLayout() {
       </aside>
 
       {/* 2. MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+
+        {/* Subtle Decorative Background Video */}
+        <UserDashboardBackground />
 
         {/* Top Header Bar */}
         <header className="h-20 px-6 border-b border-slate-200 dark:border-slate-800/80 bg-white/85 dark:bg-[#2B1E15]/90 backdrop-blur-xl flex items-center justify-between shrink-0 z-20">
@@ -298,6 +306,7 @@ export default function UserDashboardLayout() {
               <Bluetooth className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
               <span className="hidden sm:inline">Bluetooth Devices</span>
             </Link>
+
 
             <LanguageSwitcher compact />
             <ThemeToggle />
@@ -459,8 +468,18 @@ export default function UserDashboardLayout() {
           </div>
         )}
 
+        {/* 3D Holographic Heart Splash Screen */}
+        {showSplashScreen && (
+          <HeartSplashScreen
+            onComplete={() => {
+              setShowSplashScreen(false);
+              sessionStorage.removeItem('biotrajectory_patient_splash');
+            }}
+          />
+        )}
+
         {/* Scrollable Viewport for nested pages */}
-        <main className="flex-1 overflow-y-auto p-5 sm:p-8 lg:p-10">
+        <main className="flex-1 overflow-y-auto p-5 sm:p-8 lg:p-10 relative z-10">
           <Outlet />
         </main>
       </div>

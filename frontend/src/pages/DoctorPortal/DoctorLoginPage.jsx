@@ -34,6 +34,7 @@ export default function DoctorLoginPage() {
     try {
       const user = await loginDoctor(email, password);
       if (user) {
+        sessionStorage.setItem('biotrajectory_doctor_splash', 'true');
         navigate('/doctor/dashboard');
       } else {
         setError('Invalid medical credentials. Please check your email and password.');
@@ -47,11 +48,13 @@ export default function DoctorLoginPage() {
 
   const handleDemoVerifiedLogin = async () => {
     await loginDoctor('doctor@biotrajectory.health', 'doctor123');
+    sessionStorage.setItem('biotrajectory_doctor_splash', 'true');
     navigate('/doctor/dashboard');
   };
 
   const handleDemoPendingLogin = async () => {
     await loginDoctor('doctor.pending@biotrajectory.health', 'doctor123');
+    sessionStorage.setItem('biotrajectory_doctor_splash', 'true');
     navigate('/doctor/pending');
   };
 

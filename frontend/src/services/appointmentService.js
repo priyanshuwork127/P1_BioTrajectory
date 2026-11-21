@@ -341,3 +341,4 @@ export const appointmentService = {
 };
 
 export { getStoredDoctorAppointments, saveStoredDoctorAppointments };
+export default appointmentService;

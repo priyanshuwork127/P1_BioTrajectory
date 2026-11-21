@@ -28,10 +28,15 @@ import { formatDoctorTitle } from '../../services/doctorService';
 import ThemeToggle from '../common/ThemeToggle';
 import LanguageSwitcher from '../common/LanguageSwitcher';
 import BrandLogo from '../common/BrandLogo';
+import HeartSplashScreen from '../common/HeartSplashScreen';
+import App3DBackground from '../common/App3DBackground';
 
 export default function DoctorDashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showSplashScreen, setShowSplashScreen] = useState(() => {
+    return sessionStorage.getItem('biotrajectory_doctor_splash') === 'true';
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const {
@@ -218,7 +223,10 @@ export default function DoctorDashboardLayout() {
       </aside>
 
       {/* 2. DOCTOR MAIN VIEWPORT */}
-      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+
+        {/* 3D Atmospheric Background */}
+        <App3DBackground />
 
         {/* Doctor Header */}
         <header className="h-20 px-4 sm:px-6 lg:px-8 border-b border-slate-200 dark:border-slate-800 bg-white/85 dark:bg-[#251A11]/90 backdrop-blur-xl flex items-center justify-between shrink-0 z-20">
@@ -300,6 +308,7 @@ export default function DoctorDashboardLayout() {
               <BookOpen className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
               <span className="hidden md:inline">{isHindi ? 'रोग अन्वेषण' : 'Explore Diseases'}</span>
             </Link>
+
 
             {/* Language & Theme Controls */}
             <LanguageSwitcher compact />
@@ -409,8 +418,18 @@ export default function DoctorDashboardLayout() {
           </div>
         )}
 
+        {/* 3D Holographic Heart Splash Screen */}
+        {showSplashScreen && (
+          <HeartSplashScreen
+            onComplete={() => {
+              setShowSplashScreen(false);
+              sessionStorage.removeItem('biotrajectory_doctor_splash');
+            }}
+          />
+        )}
+
         {/* Content Outlet */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 bg-[#F6F0E4] dark:bg-[#1F150E]">
+        <main className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 relative z-10">
           <Outlet />
         </main>
       </div>

@@ -570,7 +570,9 @@ export class DatasetService {
 
       const matchesCountry = !country || country === 'All' || item.country.toLowerCase() === country.toLowerCase();
       const matchesYear = !year || year === 'All' || item.year.toString() === year.toString();
-      const matchesMetric = !metricType || metricType === 'All' || item.metricType === metricType;
+      const matchesMetric = !metricType || metricType === 'All' || 
+        item.metricType.toLowerCase() === metricType.toLowerCase() ||
+        item.metricType.toLowerCase().includes(metricType.toLowerCase());
 
       return matchesQuery && matchesCountry && matchesYear && matchesMetric;
     });

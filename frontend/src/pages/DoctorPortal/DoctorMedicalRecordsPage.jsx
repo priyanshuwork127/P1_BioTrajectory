@@ -29,7 +29,7 @@ import {
 import { useDoctorAuth } from '../../context/DoctorAuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { DoctorService, formatDoctorTitle } from '../../services/doctorService';
-import { appointmentService } from '../../services/appointmentService';
+import { appointmentService, getStoredDoctorAppointments } from '../../services/appointmentService';
 
 export default function DoctorMedicalRecordsPage() {
   const { doctor } = useDoctorAuth();
@@ -49,18 +49,30 @@ export default function DoctorMedicalRecordsPage() {
   const loadAllData = () => {
     try {
       const pts = (typeof DoctorService?.getDoctorPatients === 'function' ? DoctorService.getDoctorPatients(doctorUid) : []) || [];
-      const appts = (typeof appointmentService?.getDoctorAppointments === 'function'
-        ? appointmentService.getDoctorAppointments(doctorUid)
-        : (typeof appointmentService?.getStoredDoctorAppointments === 'function'
-            ? appointmentService.getStoredDoctorAppointments(doctorUid)
-            : [])) || [];
+      
+      let appts = [];
+      try {
+        if (typeof appointmentService?.getDoctorAppointments === 'function') {
+          appts = appointmentService.getDoctorAppointments(doctorUid);
+        } else if (typeof appointmentService?.getStoredDoctorAppointments === 'function') {
+          appts = appointmentService.getStoredDoctorAppointments(doctorUid);
+        } else if (typeof getStoredDoctorAppointments === 'function') {
+          appts = getStoredDoctorAppointments(doctorUid);
+        }
+      } catch (apptErr) {
+        console.warn('Error reading doctor appointments, falling back:', apptErr);
+        if (typeof getStoredDoctorAppointments === 'function') {
+          appts = getStoredDoctorAppointments(doctorUid) || [];
+        }
+      }
+
       const reps = (typeof DoctorService?.getDoctorReports === 'function' ? DoctorService.getDoctorReports(doctorUid) : []) || [];
       const rxs = (typeof DoctorService?.getDoctorPrescriptions === 'function' ? DoctorService.getDoctorPrescriptions(doctorUid) : []) || [];
 
-      setPatients(pts);
-      setAppointments(appts);
-      setReports(reps);
-      setPrescriptions(rxs);
+      setPatients(pts || []);
+      setAppointments(Array.isArray(appts) ? appts : []);
+      setReports(reps || []);
+      setPrescriptions(rxs || []);
     } catch (err) {
       console.warn('Error loading doctor medical records data:', err);
     }

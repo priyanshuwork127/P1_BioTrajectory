@@ -7,7 +7,12 @@ import {
   BookOpen,
   Database,
   AlertTriangle,
-  LogIn
+  LogIn,
+  CheckCircle2,
+  ExternalLink,
+  MapPin,
+  Calendar,
+  Activity
 } from 'lucide-react';
 import {
   DISEASES_DATABASE,
@@ -349,7 +354,7 @@ export default function ExplorePage() {
                 onChange={e => setSelectedCountry(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               >
-                <option value="All">{isHindi ? 'सभी देश' : 'All Countries'}</option>
+                <option value="All">{isHindi ? 'सभी देश (All Countries)' : 'All Countries'}</option>
                 <option value="India">India</option>
                 <option value="United States">United States</option>
                 <option value="Global">Global</option>
@@ -359,41 +364,125 @@ export default function ExplorePage() {
                 onChange={e => setSelectedYear(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               >
-                <option value="All">{isHindi ? 'सभी वर्ष' : 'All Years'}</option>
-                <option value="2024">2024</option>
+                <option value="All">{isHindi ? 'सभी वर्ष (All Years)' : 'All Years'}</option>
                 <option value="2023">2023</option>
                 <option value="2022">2022</option>
+                <option value="2021">2021</option>
               </select>
               <select
                 value={selectedMetric}
                 onChange={e => setSelectedMetric(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               >
-                <option value="All">{isHindi ? 'सभी मेट्रिक्स' : 'All Metrics'}</option>
-                <option value="incidence">Incidence</option>
-                <option value="prevalence">Prevalence</option>
-                <option value="mortality">Mortality</option>
+                <option value="All">{isHindi ? 'सभी मेट्रिक्स (All Metrics)' : 'All Metrics'}</option>
+                <option value="Reported Cases">{isHindi ? 'दर्ज मामले (Reported Cases)' : 'Reported Cases'}</option>
+                <option value="Estimated Cases">{isHindi ? 'अनुमानित मामले (Estimated Cases)' : 'Estimated Cases'}</option>
+                <option value="Incidence Rate">{isHindi ? 'घटना दर (Incidence Rate)' : 'Incidence Rate'}</option>
+                <option value="Prevalence Rate">{isHindi ? 'प्रसार दर (Prevalence Rate)' : 'Prevalence Rate'}</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {datasetsList.map(item => (
-              <div key={item.id} className="p-5 rounded-2xl glass-card border border-slate-200 dark:border-slate-800 space-y-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-600 dark:text-cyan-400">
-                  {item.source}
-                </span>
-                <h4 className="text-base font-bold text-slate-900 dark:text-white">{item.title}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{item.description}</p>
-                <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
-                  <span>{item.coverage}</span>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-cyan-600 dark:text-cyan-400 hover:underline">
-                    {isHindi ? 'स्रोत लिंक' : 'Source Link'}
-                  </a>
+          {datasetsList.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl glass-card border border-slate-200 dark:border-slate-800 space-y-3">
+              <Database className="w-10 h-10 text-slate-400 mx-auto opacity-60" />
+              <h4 className="text-lg font-bold text-slate-800 dark:text-slate-200">
+                {isHindi ? 'कोई आधिकारिक डेटासेट नहीं मिला' : 'No Official Datasets Found'}
+              </h4>
+              <p className="text-sm text-slate-500 max-w-md mx-auto">
+                {isHindi
+                  ? 'अपनी खोज या फ़िल्टर मानदंड को बदलकर पुनः प्रयास करें।'
+                  : 'Try adjusting your search keywords, country, year, or metric filters.'}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {datasetsList.map(item => (
+                <div
+                  key={item.id}
+                  className="p-6 rounded-2xl glass-card border border-slate-200/90 dark:border-slate-800/90 flex flex-col justify-between space-y-4 hover:border-cyan-500/40 transition-all duration-200 hover:shadow-xl shadow-xs"
+                >
+                  <div className="space-y-3">
+                    {/* Header Badges */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
+                        {item.source}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {item.isVerified && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            <CheckCircle2 className="w-3 h-3" />
+                            <span>{isHindi ? 'सत्यापित' : 'Verified'}</span>
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          <Calendar className="w-3 h-3 opacity-60" />
+                          <span>{item.year}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Disease & Title */}
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
+                        <Activity className="w-3.5 h-3.5" />
+                        <span>{item.diseaseName}</span>
+                      </div>
+                      <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug">
+                        {item.datasetName || item.title}
+                      </h4>
+                    </div>
+
+                    {/* Highlight Metric Plate */}
+                    <div className="p-3.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-baseline justify-between gap-3">
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-500 dark:text-slate-400 block">
+                          {item.metricType}
+                        </span>
+                        <span className="text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-400">
+                          {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300 text-right max-w-[55%]">
+                        {item.unit}
+                      </span>
+                    </div>
+
+                    {/* Definition */}
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {item.definition || item.description}
+                    </p>
+
+                    {/* Clinical Note if present */}
+                    {item.notes && (
+                      <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 leading-snug">
+                        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{item.notes}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer: Geography & External Source Link */}
+                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs gap-3">
+                    <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 truncate font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
+                      <span className="truncate">{item.country} • {item.region || 'National Total'}</span>
+                    </span>
+
+                    <a
+                      href={item.sourceUrl || item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-3d btn-3d-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition-colors shrink-0 cursor-pointer"
+                    >
+                      <span>{isHindi ? 'आधिकारिक स्रोत' : 'Source Link'}</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
