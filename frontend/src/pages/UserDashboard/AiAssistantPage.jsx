@@ -1,8 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from 'react';
+
 import {
   Bot,
   Send,
   Mic,
+  MicOff,
   Paperclip,
   Trash2,
   Volume2,
@@ -10,410 +18,759 @@ import {
   Sparkles,
   AlertTriangle,
   ShieldCheck,
-  CheckCircle2,
-  X,
   FileText,
-  Image,
-  ArrowRight,
-  Info
+  X,
+  Settings,
+  StopCircle
 } from 'lucide-react';
+
+import { Link } from 'react-router-dom';
+
 import { GeminiAssistantService } from '../../services/gemini';
+import { useAuth } from '../../context/AuthContext';
 import DisclaimerBanner from '../../components/common/DisclaimerBanner';
 
+
+const nowLabel = (value = new Date()) =>
+  new Date(value).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+
+const toMessage = (item) => ({
+  id: item.id || `${item.sender}_${Date.now()}_${Math.random()}`,
+  sender: item.sender === 'user' ? 'user' : 'assistant',
+  text: item.text || '',
+  timestamp: item.timestamp ? nowLabel(item.timestamp) : nowLabel(),
+  attachments: item.attachments || [],
+  warningCard: item.warningCard || null
+});
+
+
 export default function AiAssistantPage() {
-  const [messages, setMessages] = useState([
-    {
-      id: 'msg_welcome',
-      sender: 'assistant',
-      text: `Hello! I am your **BioTrajectory AI Health Assistant**.\n\nI am here to help you understand your blood pressure numbers, daily walking steps, and test results in simple everyday language.\n\nWhat health question can I help you with today?`,
-      timestamp: 'Just now',
-      warningCard: null
-    }
-  ]);
+
+  const { currentUser, healthProfile } = useAuth();
+
+  const hasAIConsent =
+    healthProfile?.consent?.aiAssistantAnalysis === true;
+
+  const [messages, setMessages] = useState([{
+    id: 'welcome',
+    sender: 'assistant',
+    text: 'Hello! I am your BioTrajectory AI Health Assistant. I can explain health concepts and, when you have enabled AI analysis consent, help you understand your own recorded readings. I do not diagnose or prescribe.',
+    timestamp: 'Welcome',
+    warningCard: null
+  }]);
+
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [hasDocConsent, setHasDocConsent] = useState(false);
-  const [consentModalOpen, setConsentModalOpen] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  
+  const [reportConsent, setReportConsent] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [error, setError] = useState('');
+  const [historyLoading, setHistoryLoading] = useState(true);
+
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const fileInputRef = useRef(null);
+
 
   const suggestedQuestions = [
-    'Is my blood pressure in a healthy range?',
-    'What does urine protein mean in simple words?',
-    'How many steps should I walk every day?',
-    'When should I see a doctor for high blood pressure?'
+    'Summarize my recent health readings.',
+    'Explain my blood pressure readings in simple language.',
+    'What does urine protein mean?',
+    'What questions should I ask my doctor about my results?'
   ];
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
 
-  const handleSend = async (queryText) => {
-    const textToSend = queryText || inputText;
-    if (!textToSend.trim() && attachedFiles.length === 0) return;
+    let alive = true;
 
-    const userMessage = {
-      id: `usr_${Date.now()}`,
-      sender: 'user',
-      text: textToSend,
-      attachments: [...attachedFiles],
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    (async () => {
+      try {
+
+        const history =
+          await GeminiAssistantService.initializeConversation();
+
+        if (alive && history.length) {
+          setMessages(history.map(toMessage));
+        }
+
+      } catch (err) {
+
+        if (alive) {
+          setError(
+            err.message || 'Could not load saved conversation.'
+          );
+        }
+
+      } finally {
+
+        if (alive) {
+          setHistoryLoading(false);
+        }
+
+      }
+    })();
+
+    return () => {
+      alive = false;
     };
 
-    setMessages(prev => [...prev, userMessage]);
+  }, [currentUser?.uid]);
+
+
+  useEffect(() => {
+
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth'
+    });
+
+  }, [messages, isLoading]);
+
+
+  useEffect(() => {
+
+    return () => {
+
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+
+      if (
+        typeof window !== 'undefined' &&
+        window.speechSynthesis
+      ) {
+        window.speechSynthesis.cancel();
+      }
+
+    };
+
+  }, []);
+
+
+  const speak = useCallback((text) => {
+
+    if (
+      !voiceEnabled ||
+      !('speechSynthesis' in window)
+    ) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    utterance.lang = 'en-IN';
+    utterance.rate = 1;
+
+    window.speechSynthesis.speak(utterance);
+
+  }, [voiceEnabled]);
+
+
+  const handleSend = async (query = inputText) => {
+
+    const clean = String(query || '').trim();
+
+    if ((!clean && !reports.length) || isLoading) {
+      return;
+    }
+
+    setError('');
+
+    const userMsg = {
+      id: `usr_${Date.now()}`,
+      sender: 'user',
+      text: clean || 'Please explain my uploaded report.',
+      timestamp: nowLabel(),
+      attachments: reports.map(r => ({
+        name: r.file_name,
+        type: 'application/pdf'
+      }))
+    };
+
+    setMessages(prev => [...prev, userMsg]);
+
     setInputText('');
-    setAttachedFiles([]);
     setIsLoading(true);
 
     try {
-      const response = await GeminiAssistantService.queryAssistant({
-        query: textToSend,
-        attachments: attachedFiles,
-        userConsentGiven: hasDocConsent,
-        conversationHistory: messages.filter(msg => msg.id !== 'msg_welcome' && msg.sender).slice(-8)
-      });
 
-      const assistantMessage = {
+      const result =
+        await GeminiAssistantService.queryAssistant({
+          query: clean ||
+            'Please summarize and explain the report I uploaded. Clearly separate reported values from general explanations.',
+          reportIds: reports.map(r => r.report_id)
+        });
+
+      const assistantMsg = {
         id: `asst_${Date.now()}`,
         sender: 'assistant',
-        text: response.text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        warningCard: response.warningCard || null
+        text: result.text,
+        timestamp: nowLabel(result.timestamp || new Date()),
+        warningCard: result.warningCard
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, assistantMsg]);
+
+      speak(result.text);
+
     } catch (err) {
-      console.error(err);
-      const retryMessage = {
-        id: `asst_err_${Date.now()}`,
+
+      setError(
+        err.message || 'The AI request failed. Please try again.'
+      );
+
+      setMessages(prev => [...prev, {
+        id: `err_${Date.now()}`,
         sender: 'assistant',
-        text: 'I hit a temporary backend issue while preparing your answer. Please try again in a moment.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: 'I could not complete that request. Please check the connection and try again.',
+        timestamp: nowLabel(),
         warningCard: null
-      };
-      setMessages(prev => [...prev, retryMessage]);
+      }]);
+
     } finally {
+
       setIsLoading(false);
+
     }
+
   };
 
-  const handleMicToggle = () => {
-    if (!isRecording) {
-      setIsRecording(true);
-      setTimeout(() => {
-        setIsRecording(false);
-        setInputText('Can you explain my blood pressure readings from this week?');
-      }, 3000);
-    } else {
-      setIsRecording(false);
-    }
-  };
 
-  const handleAttachMock = () => {
-    if (!hasDocConsent) {
-      setConsentModalOpen(true);
+  const handleFileSelected = async (event) => {
+
+    const file = event.target.files?.[0];
+
+    event.target.value = '';
+
+    if (!file) return;
+
+    if (!hasAIConsent) {
+      setError(
+        'Enable AI Assistant Analysis in Settings before uploading a report.'
+      );
       return;
     }
-    const mockFile = {
-      name: 'Recent_Health_Report.pdf',
-      size: '1.2 MB'
-    };
-    setAttachedFiles([...attachedFiles, mockFile]);
+
+    if (!reportConsent) {
+      setError(
+        'Confirm the report-sharing checkbox before uploading.'
+      );
+      return;
+    }
+
+    if (
+      file.type !== 'application/pdf' &&
+      !file.name.toLowerCase().endsWith('.pdf')
+    ) {
+      setError('Only PDF files are supported.');
+      return;
+    }
+
+    setError('');
+    setUploading(true);
+
+    try {
+
+      const result =
+        await GeminiAssistantService.uploadReport(file, true);
+
+      setReports(prev => [
+        ...prev.filter(r => r.report_id !== result.report_id),
+        result
+      ]);
+
+    } catch (err) {
+
+      setError(err.message || 'Report upload failed.');
+
+    } finally {
+
+      setUploading(false);
+
+    }
+
   };
 
-  const clearChat = () => {
-    GeminiAssistantService.resetConversation();
-    setMessages([
-      {
-        id: 'msg_reset',
-        sender: 'assistant',
-        text: 'Conversation cleared. How can I help you understand your health today?',
-        timestamp: 'Just now',
-        warningCard: null
-      }
-    ]);
+
+  const toggleRecording = () => {
+
+    if (isRecording) {
+
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+
+      return;
+    }
+
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+
+      setError(
+        'Speech recognition is not supported in this browser. Try Chrome or use typing.'
+      );
+
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = 'en-IN';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+
+      const transcript = Array.from(event.results)
+        .map(r => r[0].transcript)
+        .join('');
+
+      setInputText(transcript);
+
+    };
+
+    recognition.onerror = (event) => {
+
+      setError(
+        `Voice input failed: ${event.error || 'microphone unavailable'}.`
+      );
+
+      setIsRecording(false);
+
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    try {
+
+      recognition.start();
+      setIsRecording(true);
+
+    } catch {
+
+      setError(
+        'Could not start microphone. Check browser permission.'
+      );
+
+      setIsRecording(false);
+
+    }
+
   };
+
+
+  const clearChat = async () => {
+
+    if (isLoading) return;
+
+    setError('');
+
+    try {
+
+      await GeminiAssistantService.deleteConversation();
+
+      setMessages([{
+        id: `welcome_${Date.now()}`,
+        sender: 'assistant',
+        text: 'Conversation cleared. What would you like to understand about your health?',
+        timestamp: nowLabel(),
+        warningCard: null
+      }]);
+
+      setReports([]);
+
+    } catch (err) {
+
+      setError(
+        err.message || 'Could not clear the saved conversation.'
+      );
+
+    }
+
+  };
+
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto h-[calc(100vh-8.5rem)] flex flex-col">
-      
-      {/* Top Bar with Clear Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+
+    <div className="space-y-5 max-w-5xl mx-auto h-[calc(100vh-8.5rem)] min-h-[620px] flex flex-col">
+
+      {/* Header */}
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+
         <div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-3 flex-wrap">
+
             <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               Ask AI
             </h1>
+
             <span className="text-xs font-bold px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20">
-              Simple Explanations
+              Personal Health Assistant
             </span>
+
           </div>
-          <p className="text-[16px] text-slate-600 dark:text-slate-400 mt-1">
-            Ask questions and understand your health results in simple everyday language.
+
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+            Understand your recorded readings and reports in simple language.
           </p>
+
         </div>
 
-        {/* Audio & Clear Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+
           <button
-            onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className={`px-4 py-2.5 rounded-2xl border text-[15px] font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-              voiceEnabled
-                ? 'bg-cyan-500/15 border-cyan-500/35 text-cyan-700 dark:text-cyan-300 shadow-xs'
-                : 'glass-card text-slate-600 dark:text-slate-400'
-            }`}
-            title="Toggle read aloud voice"
+            onClick={() => setVoiceEnabled(v => !v)}
+            className="px-3 py-2 rounded-xl border glass-card flex items-center gap-2 text-sm"
+            title="Toggle spoken answers"
           >
-            {voiceEnabled ? <Volume2 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" /> : <VolumeX className="w-5 h-5" />}
-            <span>Voice {voiceEnabled ? 'On' : 'Off'}</span>
+            {voiceEnabled
+              ? <Volume2 size={18} />
+              : <VolumeX size={18} />
+            }
+
+            Voice {voiceEnabled ? 'On' : 'Off'}
+          </button>
+
+          <button
+            onClick={() => window.speechSynthesis?.cancel()}
+            className="p-2.5 rounded-xl glass-card text-slate-500"
+            title="Stop spoken answer"
+          >
+            <StopCircle size={19} />
           </button>
 
           <button
             onClick={clearChat}
-            className="p-2.5 rounded-2xl glass-card text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer"
-            title="Clear Chat"
+            disabled={isLoading}
+            className="p-2.5 rounded-xl glass-card text-slate-500 hover:text-rose-500"
+            title="Clear saved chat"
           >
-            <Trash2 className="w-5 h-5" />
+            <Trash2 size={19} />
           </button>
+
         </div>
+
       </div>
 
-      {/* Document Sharing Consent Status Bar */}
-      <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[15px] shrink-0">
-        <div className="flex items-center gap-3 text-slate-700 dark:text-slate-300">
-          <ShieldCheck className="w-5 h-5 text-cyan-600 dark:text-cyan-400 shrink-0" />
-          <span>
-            {hasDocConsent
-              ? 'Medical Report Access is active. The AI can explain your uploaded reports.'
-              : 'Medical report sharing is currently off. Turn it on to explain uploaded PDFs.'}
-          </span>
+
+      {/* Consent status */}
+
+      <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+
+        <div className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
+
+          <ShieldCheck className="w-5 h-5 text-cyan-600 shrink-0 mt-0.5" />
+
+          <div>
+
+            <p className="font-semibold">
+              Personal health data access: {hasAIConsent ? 'Enabled' : 'Off'}
+            </p>
+
+            <p className="text-xs mt-1">
+              Your readings are retrieved on the backend using your verified Firebase UID. They are not sent unless your AI consent is enabled.
+            </p>
+
+          </div>
+
         </div>
-        <button
-          onClick={() => setConsentModalOpen(true)}
-          className="text-xs font-bold px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-        >
-          {hasDocConsent ? 'Review Permissions' : 'Enable Report Access'}
-        </button>
+
+        {!hasAIConsent && (
+
+          <Link
+            to="/dashboard/settings"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border text-cyan-700 dark:text-cyan-300 text-xs font-bold"
+          >
+            <Settings size={15} />
+            Manage AI consent
+          </Link>
+
+        )}
+
       </div>
 
-      {/* Chat Messages Scrolling Container */}
-      <div className="flex-1 overflow-y-auto p-5 rounded-3xl glass-card border border-slate-200 dark:border-slate-800 space-y-5">
-        {messages.map((msg) => (
+
+      {/* Chat messages */}
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 rounded-3xl glass-card border border-slate-200 dark:border-slate-800 space-y-5">
+
+        {historyLoading && (
+          <p className="text-xs text-slate-500">
+            Loading your saved conversation…
+          </p>
+        )}
+
+        {messages.map(msg => (
+
           <div
             key={msg.id}
-            className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} space-y-1.5`}
+            className={`flex flex-col ${
+              msg.sender === 'user'
+                ? 'items-end'
+                : 'items-start'
+            } space-y-1.5`}
           >
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 px-1 font-medium">
-              <span>{msg.sender === 'user' ? 'You' : 'BioTrajectory Assistant'}</span>
-              <span>•</span>
-              <span>{msg.timestamp}</span>
+
+            <div className="text-xs text-slate-500 px-1">
+              {msg.sender === 'user'
+                ? 'You'
+                : 'BioTrajectory Assistant'
+              } · {msg.timestamp}
             </div>
 
             <div
-              className={`p-5 rounded-3xl max-w-[90%] sm:max-w-[85%] text-[15px] leading-relaxed space-y-3 ${
+              className={`p-4 sm:p-5 rounded-3xl max-w-[95%] sm:max-w-[88%] text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.sender === 'user'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-medium rounded-tr-none shadow-md'
-                  : 'bg-white/90 dark:bg-[#1F150E]/90 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-none shadow-xs'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-tr-none'
+                  : 'bg-white/90 dark:bg-[#1F150E]/90 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-none'
               }`}
             >
-              {/* Message text with friendly formatting */}
-              <div className="whitespace-pre-line space-y-2">
-                {msg.text}
-              </div>
 
-              {/* Attachments preview if user sent any */}
-              {msg.attachments && msg.attachments.length > 0 && (
-                <div className="pt-3 border-t border-white/20 flex flex-wrap gap-2">
-                  {msg.attachments.map((file, i) => (
-                    <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/20 text-xs">
-                      <FileText className="w-4 h-4" />
-                      <span>{file.name}</span>
-                    </div>
+              {msg.text}
+
+              {msg.attachments?.length > 0 && (
+
+                <div className="mt-3 pt-2 border-t border-current/20 text-xs flex flex-wrap gap-2">
+
+                  {msg.attachments.map((a, i) => (
+
+                    <span
+                      key={i}
+                      className="inline-flex gap-1 items-center"
+                    >
+                      <FileText size={13} />
+                      {a.name}
+                    </span>
+
                   ))}
+
                 </div>
+
               )}
 
-              {/* HEALTH WARNING UI STATE */}
               {msg.warningCard && (
-                <div className={`p-4 rounded-2xl border mt-3 space-y-3 ${
-                  msg.warningCard.level === 'critical'
-                    ? 'bg-rose-500/10 border-rose-500/40 text-rose-900 dark:text-rose-200'
-                    : 'bg-cyan-500/10 border-cyan-500/40 text-cyan-900 dark:text-cyan-200'
-                }`}>
-                  <div className="flex items-center gap-2 font-bold text-base">
-                    <AlertTriangle className={`w-5 h-5 ${msg.warningCard.level === 'critical' ? 'text-rose-500' : 'text-cyan-500'}`} />
-                    <span>{msg.warningCard.title}</span>
+
+                <div
+                  className={`mt-4 p-3 rounded-xl border ${
+                    msg.warningCard.level === 'critical'
+                      ? 'border-rose-400 bg-rose-500/10'
+                      : 'border-amber-400 bg-amber-500/10'
+                  }`}
+                >
+
+                  <div className="font-bold flex items-center gap-2">
+                    <AlertTriangle size={17} />
+                    {msg.warningCard.title}
                   </div>
-                  <p className="text-sm font-semibold">
-                    Measurement: {msg.warningCard.measurement}
+
+                  <p className="mt-2 text-xs">
+                    {msg.warningCard.measurement}
                   </p>
-                  <p className="text-sm leading-relaxed">
+
+                  <p className="mt-1 text-xs">
                     {msg.warningCard.recommendation}
                   </p>
-                  <div className="pt-1">
-                    <a
-                      href="/dashboard/consultation"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-400 text-slate-950 font-bold text-sm hover:bg-cyan-300 transition-all shadow-sm"
-                    >
-                      <span>{msg.warningCard.actionText}</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </a>
-                  </div>
+
                 </div>
+
               )}
+
             </div>
+
           </div>
+
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-3 text-[15px] text-cyan-600 dark:text-cyan-400 p-3">
-            <Bot className="w-5 h-5 animate-bounce" />
-            <span>Thinking and preparing a simple explanation...</span>
+
+          <div className="flex items-center gap-3 text-sm text-cyan-600 p-3">
+            <Bot className="animate-bounce" size={20} />
+            Reading your authorized context and preparing an explanation…
           </div>
+
         )}
 
         <div ref={messagesEndRef} />
+
       </div>
 
-      {/* Suggested Questions Chips */}
-      <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none shrink-0">
-        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1.5 pl-1">
-          <Sparkles className="w-4 h-4 text-cyan-500" /> Ideas:
+
+      {/* Suggested questions */}
+
+      <div className="flex gap-2 overflow-x-auto pb-1 shrink-0">
+
+        <span className="text-xs font-bold text-slate-500 shrink-0 flex items-center gap-1">
+          <Sparkles size={14} />
+          Ideas:
         </span>
-        {suggestedQuestions.map((q, idx) => (
+
+        {suggestedQuestions.map(q => (
+
           <button
-            key={idx}
+            key={q}
             onClick={() => handleSend(q)}
-            className="px-4 py-2 rounded-2xl text-[14px] font-medium glass-card text-slate-700 dark:text-slate-300 hover:border-cyan-400 hover:text-cyan-600 dark:hover:text-cyan-400 whitespace-nowrap transition-colors shadow-xs cursor-pointer active:scale-95"
+            disabled={isLoading}
+            className="px-3 py-2 rounded-xl text-xs glass-card whitespace-nowrap hover:border-cyan-400 disabled:opacity-50"
           >
             {q}
           </button>
+
         ))}
+
       </div>
 
-      {/* Attachments Pending Bar */}
-      {attachedFiles.length > 0 && (
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-sm shrink-0">
-          <FileText className="w-5 h-5 text-cyan-500" />
-          <span className="text-cyan-700 dark:text-cyan-300 font-medium">{attachedFiles[0].name}</span>
-          <button
-            onClick={() => setAttachedFiles([])}
-            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white ml-auto cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
-      {/* Chat Input Bar */}
-      <div className="p-2.5 rounded-3xl glass-card border border-slate-200 dark:border-slate-800 shadow-xl shrink-0">
-        <div className="flex items-center gap-2">
-          {/* File Upload Button */}
-          <button
-            onClick={handleAttachMock}
-            className="p-3 text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title="Attach a report for simple explanation"
-          >
-            <Paperclip className="w-5 h-5" />
-          </button>
+      {/* Input and report upload */}
 
-          {/* Voice Input Button */}
+      <div className="p-3 rounded-3xl glass-card border border-slate-200 dark:border-slate-800 shrink-0 space-y-3">
+
+        <div className="flex flex-wrap items-center gap-2">
+
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+
+            <input
+              type="checkbox"
+              checked={reportConsent}
+              onChange={e => setReportConsent(e.target.checked)}
+              disabled={!hasAIConsent}
+            />
+
+            I explicitly consent to sending the selected PDF text to the AI service for explanation.
+
+          </label>
+
           <button
-            onClick={handleMicToggle}
-            className={`p-3 rounded-xl transition-all cursor-pointer ${
-              isRecording
-                ? 'bg-rose-500 text-white animate-pulse'
-                : 'text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-            title="Speak your question"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || !hasAIConsent || !reportConsent}
+            className="ml-auto px-3 py-2 rounded-xl bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center gap-2 disabled:opacity-40"
           >
-            <Mic className="w-5 h-5" />
+            <Paperclip size={15} />
+            {uploading ? 'Extracting PDF…' : 'Attach PDF'}
           </button>
 
-          {/* Text Input */}
           <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={isRecording ? 'Listening to your voice...' : 'Ask about your blood pressure, steps, or health questions...'}
-            className="flex-1 py-2 px-3 bg-transparent text-[16px] text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={handleFileSelected}
           />
 
-          {/* Send Button */}
+        </div>
+
+
+        {reports.length > 0 && (
+
+          <div className="flex flex-wrap gap-2">
+
+            {reports.map(r => (
+
+              <span
+                key={r.report_id}
+                className="text-xs rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 px-2 py-1 inline-flex items-center gap-2"
+              >
+
+                <FileText size={13} />
+
+                {r.file_name}
+
+                <button
+                  onClick={() => setReports(
+                    prev => prev.filter(
+                      x => x.report_id !== r.report_id
+                    )
+                  )}
+                  aria-label="Remove report from chat"
+                >
+                  <X size={13} />
+                </button>
+
+              </span>
+
+            ))}
+
+          </div>
+
+        )}
+
+
+        <div className="flex items-center gap-2">
+
+          <button
+            onClick={toggleRecording}
+            className={`p-3 rounded-xl ${
+              isRecording
+                ? 'bg-rose-500 text-white animate-pulse'
+                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title={isRecording ? 'Stop recording' : 'Speak your question'}
+          >
+            {isRecording
+              ? <MicOff size={19} />
+              : <Mic size={19} />
+            }
+          </button>
+
+          <input
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e =>
+              e.key === 'Enter' &&
+              !e.shiftKey &&
+              handleSend()
+            }
+            placeholder={
+              isRecording
+                ? 'Listening…'
+                : 'Ask about your readings, reports or health questions…'
+            }
+            className="flex-1 min-w-0 py-3 px-3 bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none"
+          />
+
           <button
             onClick={() => handleSend()}
-            disabled={!inputText.trim() && attachedFiles.length === 0}
-            className="px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold hover:from-cyan-300 hover:to-blue-400 disabled:opacity-40 transition-all shadow-md shadow-cyan-500/20 active:scale-95 flex items-center gap-2 text-[15px] cursor-pointer"
+            disabled={
+              isLoading ||
+              (!inputText.trim() && reports.length === 0)
+            }
+            className="px-4 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold disabled:opacity-40 flex items-center gap-2"
           >
-            <span>Send</span>
-            <Send className="w-4 h-4" />
+            <Send size={16} />
+            <span className="hidden sm:inline">Send</span>
           </button>
+
         </div>
+
+        {error && (
+          <p className="text-xs text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+        )}
+
       </div>
 
-      {/* Explicit Document Consent Interface Modal */}
-      {consentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="w-full max-w-lg p-6 sm:p-8 rounded-3xl glass-card border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-6 h-6 text-cyan-500" />
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Allow Assistant to Read Reports</h3>
-              </div>
-              <button
-                onClick={() => setConsentModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <p className="text-[15px] text-slate-600 dark:text-slate-300 leading-relaxed">
-              When you upload a medical report or test result, our AI Assistant summarizes the text into everyday language.
-            </p>
+      <DisclaimerBanner text="BioTrajectory AI provides educational explanations, not diagnosis or treatment. It may make mistakes. For urgent symptoms, contact local emergency services; in India call 112." />
 
-            <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 space-y-2 text-xs text-slate-600 dark:text-slate-300">
-              <p className="font-bold text-cyan-700 dark:text-cyan-300">Your Privacy Assurances:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Your data is never sold or used for commercial advertising.</li>
-                <li>You can turn off report access or clear your chat anytime.</li>
-                <li>Summaries are educational and do not replace a doctor.</li>
-              </ul>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setHasDocConsent(false);
-                  setConsentModalOpen(false);
-                }}
-                className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer text-sm"
-              >
-                Deny Access
-              </button>
-              <button
-                onClick={() => {
-                  setHasDocConsent(true);
-                  setConsentModalOpen(false);
-                  const mockFile = { name: 'Recent_Health_Report.pdf', size: '1.2 MB' };
-                  setAttachedFiles([...attachedFiles, mockFile]);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold hover:from-cyan-300 hover:to-blue-400 transition-all cursor-pointer text-sm"
-              >
-                I Agree & Upload
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
+
   );
+
 }

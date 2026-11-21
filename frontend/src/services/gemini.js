@@ -1,264 +1,169 @@
 
-/**
- * BioTrajectory AI Assistant Client Service
- *
- * Uses the active Firebase Authentication session to obtain
- * a Firebase ID token for protected FastAPI endpoints.
- *
- * Groq credentials remain exclusively on the backend.
- */
+/** Authenticated BioTrajectory AI client. Groq credentials never reach the browser. */
+import { FirebaseService } from './firebase';
 
-import { FirebaseService } from "./firebase";
-
-const BACKEND_BASE_URL = (
+const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_BACKEND_URL ||
-  "http://127.0.0.1:8000"
-).replace(/\/$/, "");
+  'http://127.0.0.1:8000'
+).replace(/\/$/, '');
 
 let activeConversationId = null;
+let activeUid = null;
 
-export const resetConversation = () => {
-  activeConversationId = null;
-};
-
-async function getFirebaseToken(forceRefresh = false) {
+async function token(forceRefresh = false) {
   const user = FirebaseService.getCurrentUser();
-
-  if (!user) {
-    throw new Error("Please sign in to use the AI assistant.");
-  }
-
+  if (!user) throw new Error('Please sign in to use BioTrajectory AI.');
+  activeUid = user.uid;
   return FirebaseService.getIdToken(user, forceRefresh);
 }
 
-function buildHeaders(token) {
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-async function authorizedFetch(url, options = {}) {
-  // First attempt: use the current Firebase ID token.
-  let token = await getFirebaseToken(false);
-
-  let response = await fetch(url, {
+async function request(path, options = {}, retry = true) {
+  let idToken = await token(false);
+  let response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      ...options.headers,
-      ...buildHeaders(token),
-    },
+    headers: { ...(options.headers || {}), Authorization: `Bearer ${idToken}` },
+    cache: 'no-store'
   });
 
-  // If the backend rejects the token, refresh it once.
-  if (response.status === 401) {
-    token = await getFirebaseToken(true);
-
-    response = await fetch(url, {
+  if (response.status === 401 && retry) {
+    idToken = await token(true);
+    response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
-      headers: {
-        ...options.headers,
-        ...buildHeaders(token),
-      },
+      headers: { ...(options.headers || {}), Authorization: `Bearer ${idToken}` },
+      cache: 'no-store'
     });
+  }
+
+  if (!response.ok) {
+    let detail = `Request failed (${response.status}).`;
+    try {
+      const body = await response.json();
+      detail = body.detail || detail;
+    } catch {}
+
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
   }
 
   return response;
 }
 
-async function readError(response) {
-  try {
-    const data = await response.json();
-    return data.detail || `Request failed (${response.status}).`;
-  } catch {
-    return `Request failed (${response.status}).`;
-  }
+function conversationStorageKey(uid) {
+  return `bt_ai_conversation_${uid}`;
 }
 
-export class GeminiAssistantService {
-  static resetConversation() {
+export const GeminiAssistantService = {
+  resetConversation() {
+    if (activeUid) {
+      localStorage.removeItem(conversationStorageKey(activeUid));
+    }
     activeConversationId = null;
-  }
+  },
 
-  static getConversationId() {
+  getConversationId() {
     return activeConversationId;
-  }
+  },
 
-  /**
-   * Send an authenticated AI chat request.
-   */
-  static async queryAssistant({
-    query,
-    attachments = [],
-    userConsentGiven = false,
-    recentVitals = {},
-    conversationHistory = [],
-  }) {
-    if (!query || !query.trim()) {
-      return {
-        text: "Please type a health question or topic you would like me to explain.",
-        warningCard: null,
-        isEmergency: false,
-      };
-    }
+  async initializeConversation() {
+    const user = FirebaseService.getCurrentUser();
+    if (!user) throw new Error('Please sign in first.');
 
-    const payload = {
-      message: query.trim(),
-      conversation_id: activeConversationId,
-      conversation_history: (conversationHistory || [])
-        .slice(-8)
-        .map((msg) => ({
-          id: msg.id || `history_${Date.now()}`,
-          sender: msg.sender || "user",
-          text: msg.text || "",
-          timestamp: msg.timestamp || null,
-          attachments: (msg.attachments || []).map((file) => ({
-            name: file.name || "document.pdf",
-            size: file.size || null,
-            type: file.type || "application/pdf",
-          })),
-          warningCard: msg.warningCard || null,
-        })),
-      user_consent_given: Boolean(userConsentGiven),
-      attachments: (attachments || []).map((file) => ({
-        name: file.name || "document.pdf",
-        size: file.size || null,
-        type: file.type || "application/pdf",
-      })),
-    };
+    activeUid = user.uid;
+    activeConversationId =
+      localStorage.getItem(conversationStorageKey(user.uid)) || null;
+
+    if (!activeConversationId) return [];
 
     try {
-      const response = await authorizedFetch(
-        `${BACKEND_BASE_URL}/api/chat`,
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
+      const response = await request(
+        `/api/history?conversation_id=${encodeURIComponent(activeConversationId)}`
       );
-
-      if (!response.ok) {
-        const errorDetail = await readError(response);
-
-        if (response.status === 401) {
-          return {
-            text: "Your authentication session could not be verified. Please sign out, sign in again, and retry.",
-            warningCard: null,
-            isEmergency: false,
-          };
-        }
-
-        if (response.status === 429) {
-          return {
-            text: "Too many requests. Please wait briefly before sending another message.",
-            warningCard: null,
-            isEmergency: false,
-          };
-        }
-
-        return {
-          text:
-            `Service Notice (${response.status}):\n\n` +
-            `${errorDetail}\n\n` +
-            "For urgent medical concerns, contact your doctor or local health service.",
-          warningCard: null,
-          isEmergency: false,
-        };
-      }
-
-      const data = await response.json();
-
-      if (data.conversation_id) {
-        activeConversationId = data.conversation_id;
-      }
-
-      return {
-        text: data.text || data.response || "No response generated.",
-        warningCard: data.warningCard || null,
-        isEmergency: Boolean(data.is_emergency),
-        conversationId: data.conversation_id,
-      };
-    } catch (error) {
-      console.error("BioTrajectory AI request failed:", error);
-
-      if (
-        error.message?.includes("sign in") ||
-        error.message?.includes("authentication")
-      ) {
-        return {
-          text: "Please sign in to your BioTrajectory account before using the AI assistant.",
-          warningCard: null,
-          isEmergency: false,
-        };
-      }
-
-      return {
-        text:
-          `Backend connection unavailable.\n\n` +
-          `Could not reach ${BACKEND_BASE_URL}.\n\n` +
-          "Please check whether the FastAPI backend is running and the backend URL is configured correctly.",
-        warningCard: {
-          level: "warning",
-          title: "Backend Connection Offline",
-          measurement: "FastAPI Server: Unavailable",
-          recommendation: "Check the backend server and network connection.",
-          actionText: "Check Server Status",
-        },
-        isEmergency: false,
-      };
-    }
-  }
-
-  /**
-   * Retrieve authenticated conversation history.
-   */
-  static async fetchHistory(conversationId) {
-    if (!conversationId) return [];
-
-    try {
-      const url =
-        `${BACKEND_BASE_URL}/api/history?conversation_id=` +
-        encodeURIComponent(conversationId);
-
-      const response = await authorizedFetch(url, {
-        method: "GET",
-      });
-
-      if (!response.ok) {
-        console.warn(
-          "Conversation history request failed:",
-          response.status
-        );
-        return [];
-      }
 
       const data = await response.json();
       return data.messages || [];
-    } catch (error) {
-      console.warn("Failed to fetch conversation history:", error);
-      return [];
-    }
-  }
 
-  /**
-   * Retrieve health summary.
-   * This endpoint is requested without an auth header here;
-   * its backend access policy must be checked separately.
-   */
-  static async fetchHealthSummary() {
-    try {
-      const response = await fetch(
-        `${BACKEND_BASE_URL}/api/health/summary`
+    } catch (error) {
+      if (error.status === 403 || error.status === 404) {
+        this.resetConversation();
+        return [];
+      }
+      throw error;
+    }
+  },
+
+  async queryAssistant({ query, reportIds = [] }) {
+    const message = String(query || '').trim();
+
+    if (!message) {
+      throw new Error('Enter a question first.');
+    }
+
+    const response = await request('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        conversation_id: activeConversationId,
+        report_ids: reportIds,
+        user_consent_given: true
+      })
+    });
+
+    const data = await response.json();
+
+    activeConversationId = data.conversation_id;
+
+    if (activeUid && activeConversationId) {
+      localStorage.setItem(
+        conversationStorageKey(activeUid),
+        activeConversationId
       );
-
-      if (!response.ok) return null;
-
-      return await response.json();
-    } catch (error) {
-      console.warn("Failed to fetch health summary:", error);
-      return null;
     }
+
+    return {
+      text: data.text || data.response || 'No response generated.',
+      warningCard: data.warningCard || null,
+      isEmergency: Boolean(data.is_emergency),
+      conversationId: data.conversation_id,
+      timestamp: data.timestamp,
+      modelUsed: data.model_used
+    };
+  },
+
+  async uploadReport(file, consentConfirmed) {
+    if (!(file instanceof File)) {
+      throw new Error('Choose a PDF report.');
+    }
+
+    const form = new FormData();
+    form.append('file', file);
+    form.append('consent', String(Boolean(consentConfirmed)));
+
+    const response = await request('/api/ai/reports', {
+      method: 'POST',
+      body: form
+    });
+
+    return response.json();
+  },
+
+  async deleteConversation() {
+    if (!activeConversationId) return;
+
+    await request(
+      `/api/history?conversation_id=${encodeURIComponent(activeConversationId)}`,
+      { method: 'DELETE' }
+    );
+
+    this.resetConversation();
+  },
+
+  async fetchHealthSummary() {
+    const response = await request('/api/health/summary');
+    return response.json();
   }
-}
+};
 
 export default GeminiAssistantService;
