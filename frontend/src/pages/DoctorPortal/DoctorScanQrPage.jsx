@@ -26,12 +26,123 @@ import { Html5Qrcode } from "html5-qrcode";
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
 import QrTokenService from "../../services/qrTokenService";
 
+// --------------------------------------------------
+// HELPERS
+// --------------------------------------------------
+
+const formatLabel = (value) => {
+  return String(value)
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const formatValue = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return "Not available";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (item && typeof item === "object") {
+        return JSON.stringify(item);
+      }
+      return String(item);
+    }).join(", ");
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, item]) => `${formatLabel(key)}: ${formatValue(item)}`)
+      .join(" | ");
+  }
+
+  return String(value);
+};
+
+const formatDate = (value) => {
+  if (!value) return "Measurement time unavailable";
+
+  let date;
+
+  if (typeof value === "string" || typeof value === "number") {
+    date = new Date(value);
+  } else if (value?.seconds) {
+    date = new Date(value.seconds * 1000);
+  } else {
+    return "Measurement time unavailable";
+  }
+
+  return Number.isNaN(date.getTime())
+    ? "Measurement time unavailable"
+    : date.toLocaleString();
+};
+
+// --------------------------------------------------
+// READINGS DISPLAY
+// --------------------------------------------------
+
+function ReadingCard({ reading }) {
+  const values = reading.values ?? reading.value;
+
+  const entries =
+    values && typeof values === "object" && !Array.isArray(values)
+      ? Object.entries(values)
+      : null;
+
+  return (
+    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+
+      <h4 className="font-semibold text-sm text-slate-900 dark:text-white capitalize mb-3">
+        {formatLabel(reading.type || reading.name || "Measurement")}
+      </h4>
+
+      {entries && entries.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {entries.map(([key, value]) => (
+            <div
+              key={key}
+              className="p-3 rounded-lg bg-white dark:bg-slate-900"
+            >
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                {formatLabel(key)}
+              </p>
+
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 break-words">
+                {formatValue(value)}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-800 dark:text-slate-200 break-words">
+          <strong>{formatValue(values)}</strong>
+          {reading.unit ? ` ${reading.unit}` : ""}
+        </p>
+      )}
+
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
+        {formatDate(reading.measuredAt)}
+      </p>
+    </div>
+  );
+}
+
+// --------------------------------------------------
+// MAIN COMPONENT
+// --------------------------------------------------
+
 export default function DoctorScanQrPage() {
   const { isVerified } = useDoctorAuth();
 
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const [request, setRequest] = useState(null);
   const [readings, setReadings] = useState(null);
 
@@ -41,20 +152,20 @@ export default function DoctorScanQrPage() {
   const scanLockRef = useRef(false);
 
   // --------------------------------------------------
-  // SUBMIT PATIENT QR TOKEN
+  // SUBMIT TOKEN TO BACKEND
   // --------------------------------------------------
 
   const submitToken = useCallback(async (tokenValue) => {
     const cleanToken = tokenValue?.trim();
 
-    setError("");
-    setRequest(null);
-    setReadings(null);
-
     if (!cleanToken) {
       setError("Please scan or enter a valid patient QR token.");
       return;
     }
+
+    setError("");
+    setRequest(null);
+    setReadings(null);
 
     try {
       setLoading(true);
@@ -78,20 +189,20 @@ export default function DoctorScanQrPage() {
   };
 
   // --------------------------------------------------
-  // CAMERA QR SCANNER
+  // CAMERA SCANNER
   // --------------------------------------------------
 
   useEffect(() => {
     if (!scannerOpen) return;
 
     let cancelled = false;
-
-    const scanner = new Html5Qrcode("doctor-qr-reader");
-
-    scannerRef.current = scanner;
+    let scanner;
 
     const startScanner = async () => {
       try {
+        scanner = new Html5Qrcode("doctor-qr-reader");
+        scannerRef.current = scanner;
+
         await scanner.start(
           { facingMode: "environment" },
           {
@@ -107,7 +218,6 @@ export default function DoctorScanQrPage() {
 
             scanLockRef.current = true;
 
-            // Stop the camera immediately after a successful scan.
             try {
               if (scanner.isScanning) {
                 await scanner.stop();
@@ -124,22 +234,38 @@ export default function DoctorScanQrPage() {
 
             setScannerOpen(false);
 
-            // Submit the scanned token through the existing API.
             await submitToken(decodedText);
 
             scanLockRef.current = false;
           },
           () => {
-            // Ignore individual unsuccessful frame scans.
+            // Ignore unsuccessful frame scans.
           }
         );
+
+        if (cancelled && scanner.isScanning) {
+          await scanner.stop();
+          scanner.clear();
+        }
       } catch (err) {
         if (!cancelled) {
           setError(
-            "Unable to access camera. Allow camera permission and try again."
+            "Unable to access camera. Check camera permission and try again."
           );
-
           setScannerOpen(false);
+        }
+
+        if (scannerRef.current === scanner) {
+          scannerRef.current = null;
+        }
+
+        try {
+          if (scanner?.isScanning) {
+            await scanner.stop();
+          }
+          scanner?.clear();
+        } catch (cleanupError) {
+          console.warn("Scanner cleanup:", cleanupError);
         }
       }
     };
@@ -149,16 +275,20 @@ export default function DoctorScanQrPage() {
     return () => {
       cancelled = true;
 
-      if (scannerRef.current === scanner) {
-        scannerRef.current = null;
+      const activeScanner = scanner;
 
+      if (scannerRef.current === activeScanner) {
+        scannerRef.current = null;
+      }
+
+      if (activeScanner) {
         const cleanup = async () => {
           try {
-            if (scanner.isScanning) {
-              await scanner.stop();
+            if (activeScanner.isScanning) {
+              await activeScanner.stop();
             }
 
-            scanner.clear();
+            activeScanner.clear();
           } catch (err) {
             console.warn("Scanner cleanup failed:", err);
           }
@@ -217,6 +347,7 @@ export default function DoctorScanQrPage() {
     try {
       setLoading(true);
       setError("");
+      setReadings(null);
 
       const result = await QrTokenService.getAuthorizedReadings(
         request.requestId
@@ -297,7 +428,7 @@ export default function DoctorScanQrPage() {
 
       </div>
 
-      {/* SCANNER SECTION */}
+      {/* QR SCANNER */}
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm">
 
@@ -314,7 +445,6 @@ export default function DoctorScanQrPage() {
         </p>
 
         {!scannerOpen ? (
-
           <button
             type="button"
             onClick={startCamera}
@@ -324,9 +454,7 @@ export default function DoctorScanQrPage() {
             <Camera size={20} />
             Open Camera & Scan QR
           </button>
-
         ) : (
-
           <div className="mt-6 space-y-4">
 
             <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 text-sm text-cyan-800 dark:text-cyan-300">
@@ -354,9 +482,11 @@ export default function DoctorScanQrPage() {
 
         <div className="flex items-center gap-3 my-7">
           <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+
           <span className="text-xs text-slate-400 font-semibold">
             OR ENTER MANUALLY
           </span>
+
           <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
         </div>
 
@@ -399,7 +529,7 @@ export default function DoctorScanQrPage() {
 
         </form>
 
-        {/* ERROR */}
+        {/* ERROR MESSAGE */}
 
         {error && (
           <div className="mt-5 p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">
@@ -408,7 +538,7 @@ export default function DoctorScanQrPage() {
           </div>
         )}
 
-        {/* CONSENT REQUEST RESULT */}
+        {/* CONSENT REQUEST */}
 
         {request && (
           <div className="mt-6 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
@@ -463,7 +593,7 @@ export default function DoctorScanQrPage() {
           </div>
         )}
 
-        {/* AUTHORIZED READINGS */}
+        {/* AUTHORIZED PATIENT READINGS */}
 
         {readings && (
           <div className="mt-6 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900">
@@ -475,40 +605,20 @@ export default function DoctorScanQrPage() {
 
             {Array.isArray(readings.readings) &&
             readings.readings.length > 0 ? (
-
               <div className="mt-4 space-y-3">
 
                 {readings.readings.map((reading, index) => (
-                  <div
+                  <ReadingCard
                     key={reading.id || index}
-                    className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800"
-                  >
-
-                    <p className="text-sm text-slate-800 dark:text-slate-200">
-                      {reading.type || reading.name || "Measurement"}:{" "}
-                      <strong>
-                        {reading.value ?? "Not available"}
-                      </strong>{" "}
-                      {reading.unit || ""}
-                    </p>
-
-                    <p className="text-xs text-slate-500 mt-1">
-                      {reading.measuredAt
-                        ? new Date(reading.measuredAt).toLocaleString()
-                        : "Measurement time unavailable"}
-                    </p>
-
-                  </div>
+                    reading={reading}
+                  />
                 ))}
 
               </div>
-
             ) : (
-
               <p className="text-sm text-slate-500 mt-3">
                 No readings were returned for this authorization.
               </p>
-
             )}
 
           </div>
