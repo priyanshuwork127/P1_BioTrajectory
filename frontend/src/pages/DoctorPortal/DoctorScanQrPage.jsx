@@ -1,6 +1,13 @@
 
-import React, { useState } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
+
 import { Link } from "react-router-dom";
+
 import {
   QrCode,
   ShieldCheck,
@@ -10,7 +17,12 @@ import {
   ArrowLeft,
   Loader2,
   CheckCircle2,
+  Camera,
+  CameraOff,
 } from "lucide-react";
+
+import { Html5Qrcode } from "html5-qrcode";
+
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
 import QrTokenService from "../../services/qrTokenService";
 
@@ -23,39 +35,153 @@ export default function DoctorScanQrPage() {
   const [request, setRequest] = useState(null);
   const [readings, setReadings] = useState(null);
 
-  if (!isVerified) {
-    return (
-      <div className="max-w-3xl mx-auto p-6 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800">
-        <AlertTriangle className="inline mr-2" size={18} />
-        Doctor verification is required to access patient authorization.
-      </div>
-    );
-  }
+  const [scannerOpen, setScannerOpen] = useState(false);
 
-  const handleSubmitToken = async (event) => {
-    event.preventDefault();
+  const scannerRef = useRef(null);
+  const scanLockRef = useRef(false);
+
+  // --------------------------------------------------
+  // SUBMIT PATIENT QR TOKEN
+  // --------------------------------------------------
+
+  const submitToken = useCallback(async (tokenValue) => {
+    const cleanToken = tokenValue?.trim();
+
     setError("");
     setRequest(null);
     setReadings(null);
 
-    if (!token.trim()) {
-      setError("Enter the token displayed in the patient's QR code.");
+    if (!cleanToken) {
+      setError("Please scan or enter a valid patient QR token.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const result = await QrTokenService.validateToken(token.trim());
+      const result = await QrTokenService.validateToken(cleanToken);
 
       setRequest(result);
       setToken("");
     } catch (err) {
-      setError(err.message || "Unable to verify this QR token.");
+      setError(
+        err.message || "Unable to verify this QR token."
+      );
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleSubmitToken = (event) => {
+    event.preventDefault();
+    submitToken(token);
   };
+
+  // --------------------------------------------------
+  // CAMERA QR SCANNER
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+
+    const scanner = new Html5Qrcode("doctor-qr-reader");
+
+    scannerRef.current = scanner;
+
+    const startScanner = async () => {
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: {
+              width: 250,
+              height: 250,
+            },
+            aspectRatio: 1,
+          },
+          async (decodedText) => {
+            if (cancelled || scanLockRef.current) return;
+
+            scanLockRef.current = true;
+
+            // Stop the camera immediately after a successful scan.
+            try {
+              if (scanner.isScanning) {
+                await scanner.stop();
+              }
+
+              scanner.clear();
+            } catch (cameraError) {
+              console.warn("Camera cleanup:", cameraError);
+            }
+
+            if (scannerRef.current === scanner) {
+              scannerRef.current = null;
+            }
+
+            setScannerOpen(false);
+
+            // Submit the scanned token through the existing API.
+            await submitToken(decodedText);
+
+            scanLockRef.current = false;
+          },
+          () => {
+            // Ignore individual unsuccessful frame scans.
+          }
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            "Unable to access camera. Allow camera permission and try again."
+          );
+
+          setScannerOpen(false);
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      cancelled = true;
+
+      if (scannerRef.current === scanner) {
+        scannerRef.current = null;
+
+        const cleanup = async () => {
+          try {
+            if (scanner.isScanning) {
+              await scanner.stop();
+            }
+
+            scanner.clear();
+          } catch (err) {
+            console.warn("Scanner cleanup failed:", err);
+          }
+        };
+
+        cleanup();
+      }
+    };
+  }, [scannerOpen, submitToken]);
+
+  const startCamera = () => {
+    setError("");
+    scanLockRef.current = false;
+    setScannerOpen(true);
+  };
+
+  const stopCamera = () => {
+    setScannerOpen(false);
+  };
+
+  // --------------------------------------------------
+  // CHECK CONSENT STATUS
+  // --------------------------------------------------
 
   const checkRequestStatus = async () => {
     if (!request?.requestId) return;
@@ -73,11 +199,17 @@ export default function DoctorScanQrPage() {
         ...result,
       }));
     } catch (err) {
-      setError(err.message || "Unable to check consent status.");
+      setError(
+        err.message || "Unable to check consent status."
+      );
     } finally {
       setLoading(false);
     }
   };
+
+  // --------------------------------------------------
+  // LOAD AUTHORIZED READINGS
+  // --------------------------------------------------
 
   const loadAuthorizedReadings = async () => {
     if (!request?.requestId) return;
@@ -92,7 +224,9 @@ export default function DoctorScanQrPage() {
 
       setReadings(result);
     } catch (err) {
-      setError(err.message || "Unable to load authorized readings.");
+      setError(
+        err.message || "Unable to load authorized readings."
+      );
     } finally {
       setLoading(false);
     }
@@ -100,10 +234,31 @@ export default function DoctorScanQrPage() {
 
   const requestStatus = request?.status || "PENDING";
 
+  // --------------------------------------------------
+  // DOCTOR VERIFICATION
+  // --------------------------------------------------
+
+  if (!isVerified) {
+    return (
+      <div className="max-w-3xl mx-auto p-6 rounded-2xl border border-amber-200 bg-amber-50 text-amber-800">
+        <AlertTriangle className="inline mr-2" size={18} />
+        Doctor verification is required to access patient authorization.
+      </div>
+    );
+  }
+
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
+
   return (
     <div className="max-w-4xl mx-auto space-y-7 pb-12">
+
+      {/* HEADER */}
+
       <div>
         <div className="flex items-center gap-2 mb-2">
+
           <span className="text-xs font-semibold px-3 py-1 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">
             Patient Authorization
           </span>
@@ -111,6 +266,7 @@ export default function DoctorScanQrPage() {
           <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
             Backend Connected
           </span>
+
         </div>
 
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
@@ -118,39 +274,94 @@ export default function DoctorScanQrPage() {
         </h1>
 
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-          Submit a patient-issued token and wait for explicit patient consent.
+          Scan a patient's authorization QR code or enter the token manually.
         </p>
       </div>
 
+      {/* SECURITY NOTICE */}
+
       <div className="rounded-2xl border border-cyan-200 dark:border-cyan-900 bg-cyan-50 dark:bg-cyan-950/20 p-5 flex gap-3">
+
         <ShieldCheck className="w-6 h-6 text-cyan-600 shrink-0" />
 
         <div>
           <h2 className="font-bold text-cyan-900 dark:text-cyan-300">
             Patient consent is mandatory
           </h2>
+
           <p className="text-sm text-cyan-800 dark:text-cyan-400 mt-1">
-            Submitting a token only creates a consent request. It does not
-            grant access to patient records.
+            Scanning a QR code only creates a consent request.
+            Patient records remain protected until the patient explicitly approves access.
           </p>
         </div>
+
       </div>
 
+      {/* SCANNER SECTION */}
+
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm">
+
         <div className="w-16 h-16 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
           <QrCode size={36} />
         </div>
 
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-5">
-          Enter Patient QR Token
+          Scan Patient QR Code
         </h2>
 
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-          Enter the token provided by the patient. The backend verifies
-          the token and creates a consent request.
+          Use your device camera to scan the temporary authorization QR displayed by the patient.
         </p>
 
-        <form onSubmit={handleSubmitToken} className="mt-6 space-y-4">
+        {!scannerOpen ? (
+
+          <button
+            type="button"
+            onClick={startCamera}
+            disabled={loading}
+            className="mt-6 w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-semibold transition-colors"
+          >
+            <Camera size={20} />
+            Open Camera & Scan QR
+          </button>
+
+        ) : (
+
+          <div className="mt-6 space-y-4">
+
+            <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/30 text-sm text-cyan-800 dark:text-cyan-300">
+              Position the patient's QR code inside the scanning area.
+            </div>
+
+            <div
+              id="doctor-qr-reader"
+              className="w-full overflow-hidden rounded-xl border border-slate-300 dark:border-slate-700"
+            />
+
+            <button
+              type="button"
+              onClick={stopCamera}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              <CameraOff size={18} />
+              Stop Camera
+            </button>
+
+          </div>
+        )}
+
+        {/* MANUAL TOKEN ENTRY */}
+
+        <div className="flex items-center gap-3 my-7">
+          <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+          <span className="text-xs text-slate-400 font-semibold">
+            OR ENTER MANUALLY
+          </span>
+          <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+        </div>
+
+        <form onSubmit={handleSubmitToken} className="space-y-4">
+
           <label
             htmlFor="patient-qr-token"
             className="block text-sm font-semibold text-slate-700 dark:text-slate-300"
@@ -185,7 +396,10 @@ export default function DoctorScanQrPage() {
               </>
             )}
           </button>
+
         </form>
+
+        {/* ERROR */}
 
         {error && (
           <div className="mt-5 p-4 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300">
@@ -194,10 +408,14 @@ export default function DoctorScanQrPage() {
           </div>
         )}
 
+        {/* CONSENT REQUEST RESULT */}
+
         {request && (
           <div className="mt-6 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60">
+
             <div className="flex items-center gap-2">
               <CheckCircle2 className="text-emerald-600" size={20} />
+
               <h3 className="font-bold text-slate-900 dark:text-white">
                 Consent request created
               </h3>
@@ -241,59 +459,67 @@ export default function DoctorScanQrPage() {
                 This request no longer grants access to patient records.
               </p>
             )}
+
           </div>
         )}
 
-        
-{readings?.readings?.map((reading, index) => {
-  const values = reading.values || {};
+        {/* AUTHORIZED READINGS */}
 
-  const typeLabel = (reading.type || "Measurement")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+        {readings && (
+          <div className="mt-6 p-5 rounded-xl border border-emerald-200 dark:border-emerald-900">
 
-  const units = {
-    systolic: "mmHg",
-    diastolic: "mmHg",
-    pulse: "bpm",
-    bpm: "bpm",
-    spo2: "%",
-  };
+            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <FileText size={18} />
+              Authorized Patient Readings
+            </h3>
 
-  return (
-    <div
-      key={reading.id || index}
-      className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800"
-    >
-      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-        {typeLabel}
-      </p>
+            {Array.isArray(readings.readings) &&
+            readings.readings.length > 0 ? (
 
-      <div className="mt-2 space-y-1">
-        {Object.entries(values).map(([key, value]) => (
-          <p
-            key={key}
-            className="text-sm text-slate-700 dark:text-slate-300"
-          >
-            {key.replaceAll("_", " ")}:{" "}
-            <strong>{value ?? "Not available"}</strong>{" "}
-            {units[key] || ""}
-          </p>
-        ))}
+              <div className="mt-4 space-y-3">
+
+                {readings.readings.map((reading, index) => (
+                  <div
+                    key={reading.id || index}
+                    className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800"
+                  >
+
+                    <p className="text-sm text-slate-800 dark:text-slate-200">
+                      {reading.type || reading.name || "Measurement"}:{" "}
+                      <strong>
+                        {reading.value ?? "Not available"}
+                      </strong>{" "}
+                      {reading.unit || ""}
+                    </p>
+
+                    <p className="text-xs text-slate-500 mt-1">
+                      {reading.measuredAt
+                        ? new Date(reading.measuredAt).toLocaleString()
+                        : "Measurement time unavailable"}
+                    </p>
+
+                  </div>
+                ))}
+
+              </div>
+
+            ) : (
+
+              <p className="text-sm text-slate-500 mt-3">
+                No readings were returned for this authorization.
+              </p>
+
+            )}
+
+          </div>
+        )}
+
       </div>
 
-      <p className="text-xs text-slate-500 mt-2">
-        {reading.measuredAt
-          ? new Date(reading.measuredAt).toLocaleString()
-          : "Measurement time unavailable"}
-      </p>
-    </div>
-  );
-})}
-
-      </div>
+      {/* NAVIGATION */}
 
       <div className="flex flex-col sm:flex-row gap-3">
+
         <Link
           to="/doctor/patients"
           className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
@@ -309,7 +535,9 @@ export default function DoctorScanQrPage() {
           <ArrowLeft size={16} />
           Back to Appointments
         </Link>
+
       </div>
+
     </div>
   );
 }
