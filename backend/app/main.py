@@ -68,7 +68,10 @@ async def lifespan(app: FastAPI):
     )
 
     logger.info(
-        f"CORS Allowed Origins: {settings.ALLOWED_ORIGINS}"
+        "CORS Allowed Origins: "
+        "https://p1-bio-trajectory-nu.vercel.app, "
+        "http://localhost:5173, "
+        "http://127.0.0.1:5173"
     )
 
     yield
@@ -209,10 +212,12 @@ app.include_router(qr_router)
 app = CORSMiddleware(
     app=app,
     allow_origins=[
+        "https://p1-bio-trajectory-nu.vercel.app",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=600,
 )
