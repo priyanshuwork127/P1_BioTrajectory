@@ -65,40 +65,8 @@ export default function App3DBackground({
         </div>
       )}
 
-      {/* 2. 3D Perspective Grid Horizon Plane */}
-      <div className="bg-3d-grid-plane z-1" />
-
-      {/* 3. Floating 3D Volumetric Orbs in Multi-depth Parallax */}
-      <div className="absolute inset-0 z-2 overflow-hidden">
-        {/* Orb 1: Upper-Right Cyan / Baby Blue Luminous Volume */}
-        <div
-          className={`orb-3d w-[450px] h-[450px] -top-24 -right-24 bg-gradient-to-br from-[#A9D6F5]/30 to-[#45A3E2]/15 dark:from-[#A9D6F5]/20 dark:to-[#1C5885]/15 ${
-            prefersReducedMotion ? '' : 'animate-3d-float'
-          }`}
-          style={{ transform: 'translateZ(40px)' }}
-        />
-
-        {/* Orb 2: Lower-Left Warm Amber/Brown Volumetric Depth */}
-        <div
-          className={`orb-3d w-[500px] h-[500px] -bottom-36 -left-36 bg-gradient-to-tr from-[#6B4F3A]/25 to-[#D8C8B5]/20 dark:from-[#36261B]/40 dark:to-[#2B1E15]/20 ${
-            prefersReducedMotion ? '' : 'animate-3d-float-slow'
-          }`}
-          style={{ transform: 'translateZ(-30px)' }}
-        />
-
-        {/* Orb 3: Center Ambient Depth Core */}
-        {!isSubtle && (
-          <div
-            className={`orb-3d w-[350px] h-[350px] top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#A9D6F5]/15 dark:bg-[#A9D6F5]/10 ${
-              prefersReducedMotion ? '' : 'animate-float-delayed'
-            }`}
-            style={{ transform: 'translateZ(15px)' }}
-          />
-        )}
-      </div>
-
-      {/* 4. Soft Vignette Edge Falloff for Perfect UI Contrast */}
-      <div className="absolute inset-0 z-3 bg-radial-gradient from-transparent via-transparent to-[#F6F0E4]/70 dark:to-[#1F150E]/80" />
+      {/* Theme Vignette Edge Falloff */}
+      <div className="absolute inset-0 z-1 bg-radial-gradient from-transparent via-transparent to-[#F6F0E4]/70 dark:to-[#1F150E]/80" />
     </div>
   );
 }

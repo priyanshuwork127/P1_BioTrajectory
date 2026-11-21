@@ -50,26 +50,7 @@ export default function UserDashboardBackground() {
         </video>
       )}
 
-      {/* 2. 3D Perspective Grid Horizon Plane */}
-      <div className="bg-3d-grid-plane z-1" />
-
-      {/* 3. Floating 3D Volumetric Orbs in Multi-depth Parallax */}
-      <div className="absolute inset-0 z-2 overflow-hidden pointer-events-none">
-        <div
-          className={`orb-3d w-[450px] h-[450px] -top-24 -right-24 bg-gradient-to-br from-[#A9D6F5]/25 to-[#45A3E2]/15 dark:from-[#A9D6F5]/20 dark:to-[#1C5885]/15 ${
-            prefersReducedMotion ? '' : 'animate-3d-float'
-          }`}
-          style={{ transform: 'translateZ(40px)' }}
-        />
-        <div
-          className={`orb-3d w-[500px] h-[500px] -bottom-36 -left-36 bg-gradient-to-tr from-[#6B4F3A]/20 to-[#D8C8B5]/15 dark:from-[#36261B]/35 dark:to-[#2B1E15]/20 ${
-            prefersReducedMotion ? '' : 'animate-3d-float-slow'
-          }`}
-          style={{ transform: 'translateZ(-30px)' }}
-        />
-      </div>
-
-      {/* 4. Light Theme Treatment: Subtle Existing Cream (#F6F0E4) Overlay for 100% Card & Text Readability */}
+      {/* 2. Light Theme Treatment: Subtle Existing Cream (#F6F0E4) Overlay for 100% Card & Text Readability */}
       <div className="absolute inset-0 block dark:hidden bg-[#F6F0E4]/75 backdrop-blur-[0.5px] pointer-events-none z-3" />
 
       {/* 5. Dark Theme Treatment: Subtle Existing Walnut (#1F150E) Overlay to Keep Telemetry High-Contrast */}
