@@ -1,19 +1,16 @@
 
-"""
-BioTrajectory Chat API Endpoint
-Core conversational gateway connecting client requests to safety evaluation,
-conversation persistence, and the Groq AI service.
-"""
+"""Authenticated BioTrajectory AI chat endpoint."""
 
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.schemas import ChatRequest, ChatResponse
 from app.services.safety_service import ClinicalSafetyService
 from app.services.conversation_service import conversation_service
 from app.services.gemini_service import gemini_service
+from app.services.health_service import HealthDataService
 from app.core.security import get_current_user
 from app.utils.helpers import get_current_time_str, sanitize_text
 
@@ -27,49 +24,43 @@ async def handle_chat(
     payload: ChatRequest,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """
-    Process incoming user messages.
-    Requires a valid Firebase ID token.
-    """
-
-    # 1. Get authenticated Firebase user
     user_id = current_user["uid"]
 
-    # 2. Validate message
     clean_message = sanitize_text(payload.message)
 
     if not clean_message:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=422,
             detail="Message content cannot be blank."
         )
 
-    # 3. Immediate clinical emergency triage
-    is_emergency, emergency_text, emergency_card = (
-        ClinicalSafetyService.evaluate_emergency(clean_message)
-    )
-
-    if is_emergency and emergency_text:
-        logger.warning(
-            "Clinical emergency response triggered. Bypassing LLM generation."
-        )
-
+    try:
         session = conversation_service.get_or_create(
             payload.conversation_id,
             user_id=user_id
         )
+    except PermissionError:
+        raise HTTPException(
+            status_code=403,
+            detail="This conversation does not belong to your account."
+        )
 
-        current_time = get_current_time_str()
+    is_emergency, emergency_text, emergency_card = (
+        ClinicalSafetyService.evaluate_emergency(clean_message)
+    )
 
+    current_time = get_current_time_str()
+
+    if is_emergency and emergency_text:
         conversation_service.append_turn(
-            conversation_id=session.conversation_id,
-            user_text=clean_message,
-            assistant_text=emergency_text,
-            user_timestamp=current_time,
-            assistant_timestamp=current_time,
-            attachments=payload.attachments,
-            warning_card=emergency_card,
-            user_id=user_id
+            session.conversation_id,
+            clean_message,
+            emergency_text,
+            current_time,
+            current_time,
+            payload.attachments,
+            emergency_card,
+            user_id
         )
 
         return ChatResponse(
@@ -82,47 +73,86 @@ async def handle_chat(
             model_used="clinical_safety_emergency_protocol"
         )
 
-    # 4. Retrieve or create conversation session
-    session = conversation_service.get_or_create(
-        payload.conversation_id,
+    # Never trust browser-supplied conversation history.
+    # Load only server-owned history.
+    history = conversation_service.get_history(
+        session.conversation_id,
         user_id=user_id
     )
 
-    # 5. Prepare conversation history
-    history_to_use = session.messages
+    health_result = HealthDataService.retrieve_authorized_health_records(
+        user_id,
+        True
+    )
 
-    if not history_to_use and payload.conversation_history:
-        history_to_use = payload.conversation_history
+    report_ids = (
+        payload.report_ids
+        if payload.report_ids is not None
+        else conversation_service.get_report_ids(
+            session.conversation_id,
+            user_id
+        )
+    )
 
-    # 6. Generate AI response
-    # No patient records are assumed or fabricated here.
-    context_notes = None
+    owned_reports = []
+
+    if report_ids:
+        if not health_result.get("available"):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Enable AI Assistant Analysis in your "
+                    "health privacy settings before sharing reports."
+                )
+            )
+
+        owned_reports = HealthDataService.get_owned_reports(
+            user_id,
+            report_ids
+        )
+
+        if len(owned_reports) != len(set(report_ids)):
+            raise HTTPException(
+                status_code=404,
+                detail="One or more reports were not found in your account."
+            )
+
+        conversation_service.set_report_ids(
+            session.conversation_id,
+            user_id,
+            report_ids
+        )
+
+    context_notes = HealthDataService.build_context(
+        health_result,
+        owned_reports
+    )
 
     response_text, warning_card, model_used = (
         await gemini_service.generate_response(
             message=clean_message,
-            history=history_to_use,
-            user_consent=payload.user_consent_given,
+            history=history,
+            user_consent=bool(health_result.get("available")),
             attachments=payload.attachments,
             context_notes=context_notes
         )
     )
 
-    current_time = get_current_time_str()
-
-    # 7. Save conversation turn
-    conversation_service.append_turn(
-        conversation_id=session.conversation_id,
-        user_text=clean_message,
-        assistant_text=response_text,
-        user_timestamp=current_time,
-        assistant_timestamp=current_time,
-        attachments=payload.attachments,
-        warning_card=warning_card,
-        user_id=user_id
+    response_text = ClinicalSafetyService.enforce_educational_boundaries(
+        response_text
     )
 
-    # 8. Return response
+    conversation_service.append_turn(
+        session.conversation_id,
+        clean_message,
+        response_text,
+        current_time,
+        current_time,
+        payload.attachments,
+        warning_card,
+        user_id
+    )
+
     return ChatResponse(
         response=response_text,
         text=response_text,

@@ -19,6 +19,7 @@ from app.api.chat import router as chat_router
 from app.api.history import router as history_router
 from app.api.admin import router as admin_router
 from app.api.family import router as family_router
+from app.api.reports import router as ai_reports_router
 
 from app.core.config import settings
 from app.core.security import (
@@ -27,10 +28,6 @@ from app.core.security import (
 )
 
 
-# --------------------------------------------------
-# LOGGING
-# --------------------------------------------------
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -38,10 +35,6 @@ logging.basicConfig(
 
 logger = logging.getLogger("biotrajectory.main")
 
-
-# --------------------------------------------------
-# APPLICATION LIFESPAN
-# --------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,10 +72,6 @@ async def lifespan(app: FastAPI):
     logger.info("BioTrajectory backend shutting down.")
 
 
-# --------------------------------------------------
-# FASTAPI APPLICATION
-# --------------------------------------------------
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -93,10 +82,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-# --------------------------------------------------
-# REQUEST SIZE & RATE LIMITING
-# --------------------------------------------------
 
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
@@ -114,10 +99,13 @@ async def security_middleware(request: Request, call_next):
 
     if content_length:
         try:
-            if (
-                int(content_length)
-                > settings.MAX_REQUEST_SIZE_BYTES
-            ):
+            request_limit = (
+                10 * 1024 * 1024
+                if request.url.path == "/api/ai/reports"
+                else settings.MAX_REQUEST_SIZE_BYTES
+            )
+
+            if int(content_length) > request_limit:
                 return JSONResponse(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     content={
@@ -139,10 +127,6 @@ async def security_middleware(request: Request, call_next):
     return await rate_limit_middleware(request, call_next)
 
 
-# --------------------------------------------------
-# GLOBAL EXCEPTION HANDLERS
-# --------------------------------------------------
-
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
     request: Request,
@@ -151,7 +135,7 @@ async def validation_exception_handler(
     """Handle request validation errors."""
 
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Invalid request parameters.",
             "errors": [
@@ -189,10 +173,6 @@ async def generic_exception_handler(
     )
 
 
-# --------------------------------------------------
-# ROUTER REGISTRATION
-# --------------------------------------------------
-
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(history_router)
@@ -200,14 +180,11 @@ app.include_router(doctor_auth_router)
 app.include_router(admin_router)
 app.include_router(family_router)
 app.include_router(qr_router)
+app.include_router(ai_reports_router)
 
 
-# --------------------------------------------------
-# CORS CONFIGURATION
-# --------------------------------------------------
-
-# Wrap the complete FastAPI application.
-# This ensures CORS headers are applied to error responses too.
+# Wrap the complete FastAPI application so CORS headers
+# are also applied to error responses.
 
 app = CORSMiddleware(
     app=app,

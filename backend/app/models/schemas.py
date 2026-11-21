@@ -1,3 +1,4 @@
+
 """
 BioTrajectory Pydantic Schemas
 Strict request and response validation models.
@@ -39,6 +40,7 @@ class ChatRequest(BaseModel):
     )
     user_consent_given: bool = Field(default=True, description="Whether user provided consent for report reading")
     attachments: Optional[List[AttachmentItem]] = Field(default=None, description="Uploaded file metadata")
+    report_ids: Optional[List[str]] = Field(default=None, max_length=5, description="Owned report IDs uploaded by this authenticated user")
 
     @field_validator("message")
     @classmethod
@@ -81,4 +83,3 @@ class HealthSummaryResponse(BaseModel):
     reason: Optional[str] = Field(default=None, description="Explanation if records are unavailable")
     data: Optional[Dict[str, Any]] = Field(default=None, description="Aggregated metric calculations")
     disclaimer: str = Field(..., description="Clinical educational disclaimer")
-
