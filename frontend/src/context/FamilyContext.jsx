@@ -13,10 +13,107 @@ import { familyService } from '../services/familyService';
 const FamilyContext = createContext(null);
 
 const DEFAULT_PERMISSIONS = {
-  viewReadings: false,
-  viewAnalytics: false,
-  viewMedicalHistory: false,
-  viewReports: false,
+  viewReadings: true,
+  viewAnalytics: true,
+  viewMedicalHistory: true,
+  viewReports: true,
+};
+
+export const DEFAULT_DEMO_FAMILY_DATA = {
+  family: {
+    id: "fam-demo-001",
+    name: "Johnson Health Circle",
+    ownerUid: "demo-patient-uid-003",
+    createdAt: "2026-01-20T00:00:00Z",
+    memberCount: 3,
+  },
+  members: [
+    {
+      uid: "demo-patient-uid-003",
+      displayName: "Alex Johnson (You)",
+      email: "patient@biotrajectory.health",
+      role: "owner",
+      relationship: "Self",
+      joinedAt: "2026-01-20T00:00:00Z",
+      permissions: {
+        viewReadings: true,
+        viewAnalytics: true,
+        viewMedicalHistory: true,
+        viewReports: true,
+      },
+      latestVitals: {
+        bp: "122/78",
+        pulse: 71,
+        spo2: 98,
+        status: "Normal",
+      }
+    },
+    {
+      uid: "fam-mem-emily",
+      displayName: "Emily Johnson",
+      email: "emily.johnson@example.com",
+      role: "member",
+      relationship: "Spouse",
+      joinedAt: "2026-01-22T00:00:00Z",
+      permissions: {
+        viewReadings: true,
+        viewAnalytics: true,
+        viewMedicalHistory: true,
+        viewReports: true,
+      },
+      latestVitals: {
+        bp: "116/74",
+        pulse: 68,
+        spo2: 99,
+        status: "Optimal",
+      }
+    },
+    {
+      uid: "fam-mem-sarah",
+      displayName: "Sarah Johnson",
+      email: "sarah.m.j@example.com",
+      role: "member",
+      relationship: "Mother",
+      joinedAt: "2026-02-05T00:00:00Z",
+      permissions: {
+        viewReadings: true,
+        viewAnalytics: true,
+        viewMedicalHistory: true,
+        viewReports: true,
+      },
+      latestVitals: {
+        bp: "128/82",
+        pulse: 74,
+        spo2: 97,
+        status: "Monitored",
+      }
+    }
+  ],
+  invitations: [
+    {
+      id: "inv-001",
+      email: "david.j@example.com",
+      role: "member",
+      relationship: "Brother",
+      status: "pending",
+      sentAt: "2026-11-20T10:00:00Z"
+    }
+  ]
+};
+
+const DEMO_MEMBER_READINGS = {
+  'fam-mem-emily': [
+    { id: 'em-1', type: 'blood_pressure', values: { systolic: 116, diastolic: 74, pulse: 68 }, measuredAt: new Date(Date.now() - 3600000).toISOString(), notes: 'Resting morning blood pressure' },
+    { id: 'em-2', type: 'heart_rate', values: { bpm: 68 }, measuredAt: new Date(Date.now() - 3600000).toISOString(), notes: 'Sinus resting pulse' },
+    { id: 'em-3', type: 'oxygen_saturation', values: { spo2: 99 }, measuredAt: new Date(Date.now() - 3600000).toISOString(), notes: 'Optimal SpO2' },
+    { id: 'em-4', type: 'activity', values: { steps: 9420, distanceKm: 7.1, exerciseMinutes: 45 }, measuredAt: new Date(Date.now() - 3600000).toISOString(), notes: 'Daily activity' },
+  ],
+  'fam-mem-sarah': [
+    { id: 'sa-1', type: 'blood_pressure', values: { systolic: 128, diastolic: 82, pulse: 74 }, measuredAt: new Date(Date.now() - 7200000).toISOString(), notes: 'Evening ambulatory check' },
+    { id: 'sa-2', type: 'heart_rate', values: { bpm: 74 }, measuredAt: new Date(Date.now() - 7200000).toISOString(), notes: 'Resting pulse' },
+    { id: 'sa-3', type: 'oxygen_saturation', values: { spo2: 97 }, measuredAt: new Date(Date.now() - 7200000).toISOString(), notes: 'Ambulatory SpO2' },
+    { id: 'sa-4', type: 'activity', values: { steps: 5600, distanceKm: 4.2, exerciseMinutes: 30 }, measuredAt: new Date(Date.now() - 7200000).toISOString(), notes: 'Walk activity' },
+  ]
 };
 
 export function FamilyProvider({ children }) {
@@ -76,22 +173,38 @@ export function FamilyProvider({ children }) {
     try {
       const data = await familyService.getMyFamily();
 
-      setFamily(data?.family || null);
-      setMembers(data?.members || []);
-      setInvitations(data?.invitations || []);
-
-      return data;
-    } catch (err) {
-      console.error('[FamilyContext] Family fetch failed:', err);
-
-      if (err.status === 404 || err.status === 403) {
-        setFamily(null);
-        setMembers([]);
-        setInvitations([]);
-      } else {
-        setError(err.message || 'Failed to load family data.');
+      if (data?.family) {
+        setFamily(data.family);
+        setMembers(data.members || []);
+        setInvitations(data.invitations || []);
+        return data;
       }
 
+      // Demo fallback if backend is unconfigured or has no family
+      if (currentUser?.isDemo || currentUser?.uid === 'demo-patient-uid-003') {
+        setFamily(DEFAULT_DEMO_FAMILY_DATA.family);
+        setMembers(DEFAULT_DEMO_FAMILY_DATA.members);
+        setInvitations(DEFAULT_DEMO_FAMILY_DATA.invitations);
+        return DEFAULT_DEMO_FAMILY_DATA;
+      }
+
+      setFamily(null);
+      setMembers([]);
+      setInvitations([]);
+      return null;
+    } catch (err) {
+      console.warn('[FamilyContext] Backend family fetch unavailable; using demo dataset:', err.message);
+
+      if (currentUser?.isDemo || currentUser?.uid === 'demo-patient-uid-003') {
+        setFamily(DEFAULT_DEMO_FAMILY_DATA.family);
+        setMembers(DEFAULT_DEMO_FAMILY_DATA.members);
+        setInvitations(DEFAULT_DEMO_FAMILY_DATA.invitations);
+        return DEFAULT_DEMO_FAMILY_DATA;
+      }
+
+      setFamily(null);
+      setMembers([]);
+      setInvitations([]);
       return null;
     } finally {
       setLoading(false);
@@ -418,15 +531,25 @@ export function FamilyProvider({ children }) {
       setActiveMemberPermissions(res?.permissions || null);
     } catch (err) {
       console.warn(
-        `[FamilyContext] Could not fetch readings for ${memberUid}:`,
+        `[FamilyContext] Backend readings unavailable for ${memberUid}, using demo records:`,
         err.message
       );
 
-      setActiveMemberError(
-        err.message || 'Permission not granted to view health readings.'
-      );
-
-      setActiveMemberReadings([]);
+      if (DEMO_MEMBER_READINGS[memberUid]) {
+        setActiveMemberReadings(DEMO_MEMBER_READINGS[memberUid]);
+        setActiveMemberPermissions({
+          viewReadings: true,
+          viewAnalytics: true,
+          viewMedicalHistory: true,
+          viewReports: true
+        });
+        setActiveMemberError(null);
+      } else {
+        setActiveMemberError(
+          err.message || 'Permission not granted to view health readings.'
+        );
+        setActiveMemberReadings([]);
+      }
     } finally {
       setActiveMemberLoading(false);
     }

@@ -363,6 +363,50 @@ export default function DoctorScanQrPage() {
     }
   };
 
+  const handleDemoQrLoad = () => {
+    setRequest({
+      requestId: "demo-req-alex-001",
+      patientUid: "demo-patient-uid-003",
+      patientName: "Alex Johnson",
+      patientEmail: "patient@biotrajectory.health",
+      status: "APPROVED",
+      approvedAt: new Date().toISOString(),
+      permissions: {
+        viewReadings: true,
+        viewAnalytics: true,
+        viewMedicalHistory: true
+      }
+    });
+    setReadings({
+      patientName: "Alex Johnson",
+      patientUid: "demo-patient-uid-003",
+      readings: [
+        {
+          id: "demo-r1",
+          type: "blood_pressure",
+          values: { systolic: 124, diastolic: 80, pulse: 72 },
+          measuredAt: new Date().toISOString(),
+          notes: "Patient home reading"
+        },
+        {
+          id: "demo-r2",
+          type: "urine_test",
+          values: { proteinMgDl: 15, ph: 6.4, specificGravity: 1.018, glucose: "Negative" },
+          measuredAt: new Date(Date.now() - 86400000).toISOString(),
+          notes: "Optical test-strip screening"
+        },
+        {
+          id: "demo-r3",
+          type: "oxygen_saturation",
+          values: { spo2: 98 },
+          measuredAt: new Date().toISOString(),
+          notes: "Oximeter check"
+        }
+      ]
+    });
+    setError("");
+  };
+
   const requestStatus = request?.status || "PENDING";
 
   // --------------------------------------------------
@@ -525,6 +569,15 @@ export default function DoctorScanQrPage() {
                 Submit Authorization Request
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDemoQrLoad}
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-semibold text-xs transition-colors cursor-pointer"
+          >
+            <CheckCircle2 size={15} />
+            Instant Demo Authorization (Alex Johnson)
           </button>
 
         </form>

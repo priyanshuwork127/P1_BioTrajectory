@@ -76,15 +76,27 @@ export const DEFAULT_DEMO_REPORTS = [
   }
 ];
 
+export const getStoredReports = () => {
+  try {
+    const raw = localStorage.getItem("biotrajectory_consultation_reports");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_DEMO_REPORTS;
+};
+
 export default function DoctorReportsPage() {
   const { doctor, isVerified } = useDoctorAuth();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all"); // 'all' | 'Signed' | 'Draft'
   const [selectedReport, setSelectedReport] = useState(null);
+  const [reports, setReports] = useState(getStoredReports);
 
   const filteredReports = useMemo(() => {
-    return DEFAULT_DEMO_REPORTS.filter((report) => {
+    return reports.filter((report) => {
       const matchesSearch =
         report.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,7 +107,7 @@ export default function DoctorReportsPage() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [searchTerm, filterStatus]);
+  }, [reports, searchTerm, filterStatus]);
 
   return (
     <div className="space-y-8 pb-12 font-sans">

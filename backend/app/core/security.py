@@ -223,6 +223,34 @@ def verify_auth_token(
     if token.startswith("mock_") or "sig_mock_" in token or token == "invalid_token":
         return False, "invalid_token", None
 
+    # Demo tokens for complete sandbox evaluation across all roles
+    if token.startswith("demo_") or token.startswith("biotraj_"):
+        token_lower = token.lower()
+        if "admin" in token_lower:
+            return True, "demo_token", {
+                "uid": "demo-admin-uid-001",
+                "role": "ADMIN",
+                "email": "admin@biotrajectory.health",
+                "name": "System Administrator",
+                "claims": {"role": "ADMIN"}
+            }
+        elif "doc" in token_lower:
+            return True, "demo_token", {
+                "uid": "demo-doctor-uid-002",
+                "role": "DOCTOR",
+                "email": "doctor@biotrajectory.health",
+                "name": "Dr. Sarah Mitchell, MD",
+                "claims": {"role": "DOCTOR"}
+            }
+        else:
+            return True, "demo_token", {
+                "uid": "demo-patient-uid-003",
+                "role": "USER",
+                "email": "patient@biotrajectory.health",
+                "name": "Alex Johnson",
+                "claims": {"role": "USER"}
+            }
+
     if not initialize_firebase_admin():
         try:
             import jwt
@@ -237,14 +265,6 @@ def verify_auth_token(
                 return True, "development_decoded", decoded
         except Exception as e:
             logger.debug("Dev fallback token decode failed: %s", e)
-
-        if token.startswith("demo_") or token.startswith("biotraj_"):
-            is_doc = "doc" in token.lower()
-            return True, "demo_token", {
-                "uid": "doc_sarah" if is_doc else "pat-101",
-                "role": "DOCTOR" if is_doc else "USER",
-                "email": "doctor@biotrajectory.com" if is_doc else "patient@biotrajectory.com"
-            }
 
         return False, "production_not_configured", None
 

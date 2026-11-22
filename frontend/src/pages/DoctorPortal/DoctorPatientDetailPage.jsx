@@ -19,7 +19,7 @@ import {
 
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
 import { useLanguage } from "../../context/LanguageContext";
-import { doctorPatientService } from "../../services/doctorPatientService";
+import { doctorPatientService, DEFAULT_DEMO_PATIENTS } from "../../services/doctorPatientService";
 import { appointmentService } from "../../services/appointmentService";
 
 function formatDate(value, isHindi = false) {
@@ -80,13 +80,27 @@ export default function DoctorPatientDetailPage() {
       doctorPatientService.subscribeToDoctorPatients(
         doctor.uid,
         (patientList) => {
-          const matchedPatient = patientList.find(
+          let matched = patientList.find(
             (item) =>
               item.patientId === id ||
-              item.id === id
+              item.id === id ||
+              item.uid === id
           );
 
-          setPatient(matchedPatient || null);
+          if (!matched) {
+            matched = DEFAULT_DEMO_PATIENTS.find(
+              (item) =>
+                item.patientId === id ||
+                item.id === id ||
+                item.uid === id
+            );
+          }
+
+          if (!matched && (id === "pat-101" || id === "demo-patient-uid-003" || id === "usr-demo-1")) {
+            matched = DEFAULT_DEMO_PATIENTS[0];
+          }
+
+          setPatient(matched || null);
           setLoading(false);
         },
         (err) => {
@@ -147,13 +161,27 @@ export default function DoctorPatientDetailPage() {
           ),
         ]);
 
-      const matchedPatient = patientList.find(
+      let matched = patientList.find(
         (item) =>
           item.patientId === id ||
-          item.id === id
+          item.id === id ||
+          item.uid === id
       );
 
-      setPatient(matchedPatient || null);
+      if (!matched) {
+        matched = DEFAULT_DEMO_PATIENTS.find(
+          (item) =>
+            item.patientId === id ||
+            item.id === id ||
+            item.uid === id
+        );
+      }
+
+      if (!matched && (id === "pat-101" || id === "demo-patient-uid-003" || id === "usr-demo-1")) {
+        matched = DEFAULT_DEMO_PATIENTS[0];
+      }
+
+      setPatient(matched || null);
 
       setAppointments(
         appointmentList.filter(

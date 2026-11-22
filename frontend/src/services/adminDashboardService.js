@@ -1,5 +1,5 @@
 
-import { auth } from "./firebase";
+import { auth, FirebaseService } from "./firebase";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -9,13 +9,15 @@ const API_BASE_URL =
 // ============================================================
 
 async function adminRequest(endpoint) {
-  const user = auth?.currentUser;
+  const user = auth?.currentUser || FirebaseService.getCurrentUser();
 
   if (!user) {
     throw new Error("You must be logged in.");
   }
 
-  const token = await user.getIdToken();
+  const token = typeof user.getIdToken === 'function'
+    ? await user.getIdToken()
+    : `demo_token_${(user.role || 'admin').toLowerCase()}_${user.uid}`;
 
   const response = await fetch(
     `${API_BASE_URL}${endpoint}`,
@@ -97,6 +99,7 @@ export function saveStoredRoleOverrides(overrides) {
     console.error("Failed to persist role overrides:", e);
   }
 }
+
 export const DEFAULT_DEMO_USERS = [
   {
     uid: "usr-demo-1",
@@ -108,17 +111,19 @@ export const DEFAULT_DEMO_USERS = [
     registeredDate: "2026-01-15",
     lastActive: "Just now",
     twoFactorEnabled: true,
+    condition: "Stage III Hypertension & Trace Proteinuria",
   },
   {
     uid: "usr-demo-2",
     id: "usr-demo-2",
     name: "Dr. Sarah Mitchell",
-    email: "sarah.mitchell@biotrajectory.health",
+    email: "doctor@biotrajectory.health",
     role: "DOCTOR",
     status: "ACTIVE",
     registeredDate: "2025-11-10",
     lastActive: "10 mins ago",
     twoFactorEnabled: true,
+    specialty: "Cardiology & Internal Medicine",
   },
   {
     uid: "usr-demo-3",
@@ -130,6 +135,7 @@ export const DEFAULT_DEMO_USERS = [
     registeredDate: "2026-02-01",
     lastActive: "1 hour ago",
     twoFactorEnabled: false,
+    condition: "Post-Viral Fatigue & Microcytic Anemia",
   },
   {
     uid: "usr-demo-4",
@@ -141,6 +147,7 @@ export const DEFAULT_DEMO_USERS = [
     registeredDate: "2026-02-14",
     lastActive: "Yesterday",
     twoFactorEnabled: true,
+    condition: "Stage 1 Essential Hypertension",
   },
   {
     uid: "usr-demo-5",
@@ -152,6 +159,7 @@ export const DEFAULT_DEMO_USERS = [
     registeredDate: "2025-08-20",
     lastActive: "30 mins ago",
     twoFactorEnabled: true,
+    specialty: "Preventive Cardiology & Longevity",
   },
   {
     uid: "usr-demo-6",
@@ -163,6 +171,78 @@ export const DEFAULT_DEMO_USERS = [
     registeredDate: "2025-01-01",
     lastActive: "Active Now",
     twoFactorEnabled: true,
+  },
+  {
+    uid: "usr-demo-7",
+    id: "usr-demo-7",
+    name: "Emily Johnson",
+    email: "emily.johnson@example.com",
+    role: "USER",
+    status: "ACTIVE",
+    registeredDate: "2026-02-18",
+    lastActive: "3 hours ago",
+    twoFactorEnabled: true,
+    condition: "Gestational Wellness Surveillance",
+  },
+  {
+    uid: "usr-demo-8",
+    id: "usr-demo-8",
+    name: "Marcus Vance",
+    email: "marcus.vance@example.com",
+    role: "USER",
+    status: "ACTIVE",
+    registeredDate: "2025-12-04",
+    lastActive: "Today",
+    twoFactorEnabled: true,
+    condition: "Glomerular Proteinuria (CKD Stage 2)",
+  },
+  {
+    uid: "usr-demo-9",
+    id: "usr-demo-9",
+    name: "Sophia Taylor",
+    email: "sophia.taylor@example.com",
+    role: "USER",
+    status: "ACTIVE",
+    registeredDate: "2026-03-01",
+    lastActive: "2 days ago",
+    twoFactorEnabled: false,
+    condition: "Metabolic Syndrome & Impaired Fasting Glucose",
+  },
+  {
+    uid: "usr-demo-10",
+    id: "usr-demo-10",
+    name: "David Patel",
+    email: "david.patel@example.com",
+    role: "USER",
+    status: "SUSPENDED",
+    registeredDate: "2025-10-12",
+    lastActive: "15 days ago",
+    twoFactorEnabled: false,
+    condition: "Awaiting Identity Re-verification",
+  },
+  {
+    uid: "usr-demo-11",
+    id: "usr-demo-11",
+    name: "Dr. Robert Chen",
+    email: "doctor.pending@biotrajectory.health",
+    role: "DOCTOR",
+    status: "PENDING",
+    registeredDate: "2026-11-19",
+    lastActive: "4 hours ago",
+    twoFactorEnabled: true,
+    specialty: "Cardiothoracic Surgery",
+  },
+  {
+    uid: "usr-demo-12",
+    id: "usr-demo-12",
+    name: "Dr. Priyanshi Mehta",
+    email: "p.mehta@endocare.org",
+    role: "DOCTOR",
+    status: "PENDING",
+    registeredDate: "2026-11-20",
+    lastActive: "1 day ago",
+    twoFactorEnabled: true,
+    specialty: "Endocrinology & Diabetic Trajectory",
   },
 ];
 

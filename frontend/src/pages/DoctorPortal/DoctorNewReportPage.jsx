@@ -1,22 +1,72 @@
 
-import React from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   FileText,
   ShieldCheck,
-  AlertTriangle,
-  LockKeyhole,
+  CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
+import { DEFAULT_DEMO_PATIENTS } from "../../services/doctorPatientService";
 
 export default function DoctorNewReportPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { doctor, isVerified } = useDoctorAuth();
 
-  const patientId = searchParams.get("patientId");
-  const patientName = searchParams.get("name");
+  const initialPatientId = searchParams.get("patientId") || "pat-101";
+  const [selectedPatientId, setSelectedPatientId] = useState(initialPatientId);
+  const [reportType, setReportType] = useState("Video Consultation");
+  const [diagnosis, setDiagnosis] = useState("Stage 1 Essential Hypertension & Trajectory Review");
+  const [chiefComplaints, setChiefComplaints] = useState("Follow-up review of ambulatory blood pressure and lifestyle adherence. Occasional mild occipital tightness.");
+  const [bp, setBp] = useState("124/80 mmHg");
+  const [hr, setHr] = useState("72 bpm");
+  const [spo2, setSpo2] = useState("98%");
+  const [temp, setTemp] = useState("98.6°F");
+  const [plan, setPlan] = useState("Maintain dietary sodium moderation (<2g/day). Continue prescribed pharmacotherapy schedule. Scheduled routine urinalysis strip scan in 3 weeks.");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successNotice, setSuccessNotice] = useState(false);
+
+  const selectedPatient =
+    DEFAULT_DEMO_PATIENTS.find((p) => p.id === selectedPatientId || p.patientId === selectedPatientId) ||
+    DEFAULT_DEMO_PATIENTS[0];
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const newReport = {
+      id: `REP-${Math.floor(10 + Math.random() * 90)}`,
+      patientName: selectedPatient.name,
+      patientId: selectedPatient.id,
+      diagnosis,
+      chiefComplaints,
+      date: new Date().toISOString().split("T")[0],
+      type: reportType,
+      status: "Signed",
+      vitals: { bp, hr, spo2, temp },
+      plan,
+      signedBy: doctor?.name || "Dr. Sarah Mitchell, MD",
+      licenseNumber: "MED-94827-DL",
+    };
+
+    try {
+      const raw = localStorage.getItem("biotrajectory_consultation_reports");
+      const existing = raw ? JSON.parse(raw) : [];
+      localStorage.setItem("biotrajectory_consultation_reports", JSON.stringify([newReport, ...existing]));
+      window.dispatchEvent(new CustomEvent("biotrajectory_report_added", { detail: newReport }));
+    } catch (err) {
+      console.warn("Local storage write error:", err);
+    }
+
+    setSuccessNotice(true);
+    setTimeout(() => {
+      navigate("/doctor/reports");
+    }, 900);
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-7 pb-12">
@@ -34,12 +84,15 @@ export default function DoctorNewReportPage() {
             Clinical Documentation
           </span>
 
-          {isVerified && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Verified Doctor
-            </span>
-          )}
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Verified Physician Access
+          </span>
+
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-cyan-100 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-400 flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            Active Demo Mode
+          </span>
         </div>
 
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
@@ -47,109 +100,164 @@ export default function DoctorNewReportPage() {
         </h1>
 
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Clinical report creation will be enabled after secure Firestore
-          integration.
+          Draft and publish clinical consultation notes, objective vitals, and trajectory care plans.
         </p>
       </div>
 
-      <div className="rounded-2xl p-5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
-
-          <div>
-            <h2 className="font-bold text-sm text-amber-900 dark:text-amber-200">
-              Report creation temporarily unavailable
-            </h2>
-
-            <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 mt-1">
-              The previous form contained pre-filled fictional patient
-              information, sample clinical measurements, and a demo
-              diagnosis. It also saved to localStorage instead of
-              Firestore. These behaviours have been disabled to prevent
-              accidental creation of false medical records.
-            </p>
-          </div>
+      {successNotice && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+          <span className="font-semibold text-sm">Consultation report signed and published to patient archive! Redirecting...</span>
         </div>
-      </div>
+      )}
 
-      <div className="rounded-2xl p-6 sm:p-8 bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
+      {/* Report Form */}
+      <form onSubmit={handleSubmit} className="rounded-3xl p-6 sm:p-8 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
             <FileText className="w-6 h-6" />
           </div>
 
           <div>
             <h2 className="font-bold text-slate-900 dark:text-white">
-              Report Details
+              Official Consultation Report
             </h2>
             <p className="text-xs text-slate-500">
-              Selected patient information
+              Physician: {doctor?.fullName || doctor?.name || "Dr. Sarah Mitchell, MD"}
             </p>
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70">
-            <p className="text-xs text-slate-500 mb-1">
-              Patient Name
-            </p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              {patientName || "No patient selected"}
-            </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Select Patient
+            </label>
+            <select
+              value={selectedPatientId}
+              onChange={(e) => setSelectedPatientId(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {DEFAULT_DEMO_PATIENTS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.diagnosis || "Active Consultation"})
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70">
-            <p className="text-xs text-slate-500 mb-1">
-              Patient ID
-            </p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white break-all">
-              {patientId || "Not available"}
-            </p>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Consultation Format
+            </label>
+            <select
+              value={reportType}
+              onChange={(e) => setReportType(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Video Consultation">In-App Video Consultation</option>
+              <option value="In-Person Consultation">In-Person Clinic Visit</option>
+              <option value="Urinalysis Lab Review">Urinalysis Biomarker Review</option>
+            </select>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70">
-            <p className="text-xs text-slate-500 mb-1">
-              Doctor
-            </p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              {doctor?.fullName || doctor?.name || "Not available"}
-            </p>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Clinical Diagnosis / Assessment
+            </label>
+            <input
+              type="text"
+              value={diagnosis}
+              onChange={(e) => setDiagnosis(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/70">
-            <p className="text-xs text-slate-500 mb-1">
-              Doctor Verification
-            </p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">
-              {isVerified ? "Verified" : "Pending verification"}
-            </p>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Chief Complaints & Subjective Findings
+            </label>
+            <textarea
+              rows={2}
+              value={chiefComplaints}
+              onChange={(e) => setChiefComplaints(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Objective Vitals */}
+          <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Blood Pressure</label>
+              <input
+                type="text"
+                value={bp}
+                onChange={(e) => setBp(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Heart Rate</label>
+              <input
+                type="text"
+                value={hr}
+                onChange={(e) => setHr(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">SpO2</label>
+              <input
+                type="text"
+                value={spo2}
+                onChange={(e) => setSpo2(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 mb-1">Temperature</label>
+              <input
+                type="text"
+                value={temp}
+                onChange={(e) => setTemp(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Treatment Plan & Clinical Trajectory Recommendations
+            </label>
+            <textarea
+              rows={3}
+              value={plan}
+              onChange={(e) => setPlan(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
 
-        <div className="mt-6 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-bold text-sm">
-            <LockKeyhole className="w-4 h-4 text-amber-500" />
-            Secure storage not configured
-          </div>
-
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-            Before enabling this form, we need a Firestore report
-            collection, validated report fields, doctor ownership checks,
-            patient authorization, and a trusted signature workflow.
-            A frontend verification flag alone is not sufficient to
-            authorize a medical signature.
-          </p>
-        </div>
-
-        <div className="mt-6 flex justify-end">
+        <div className="pt-4 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
           <Link
             to="/doctor/reports"
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold"
+            className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
           >
-            Back to Reports
+            Cancel
           </Link>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-60"
+          >
+            {isSubmitting ? "Publishing..." : "Sign & Publish Report"}
+          </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

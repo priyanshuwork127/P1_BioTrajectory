@@ -54,11 +54,31 @@ const DEMO_PRESCRIPTIONS = [
   },
 ];
 
+export const getStoredPrescriptions = () => {
+  try {
+    const raw = localStorage.getItem("biotrajectory_prescriptions");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEMO_PRESCRIPTIONS;
+};
+
 export default function DoctorPrescriptionsPage() {
   const { doctor, isVerified } = useDoctorAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [prescriptions, setPrescriptions] = useState(getStoredPrescriptions);
 
-  const filteredPrescriptions = DEMO_PRESCRIPTIONS.filter(
+  useEffect(() => {
+    const handleUpdate = () => {
+      setPrescriptions(getStoredPrescriptions());
+    };
+    window.addEventListener("biotrajectory_rx_added", handleUpdate);
+    return () => window.removeEventListener("biotrajectory_rx_added", handleUpdate);
+  }, []);
+
+  const filteredPrescriptions = prescriptions.filter(
     (rx) =>
       rx.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rx.medication.toLowerCase().includes(searchTerm.toLowerCase()) ||

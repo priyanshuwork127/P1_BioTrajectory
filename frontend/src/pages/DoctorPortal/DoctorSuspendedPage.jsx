@@ -82,6 +82,26 @@ export default function DoctorSuspendedPage() {
             <LogOut className="w-4 h-4" />
             Sign Out
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                const stored = localStorage.getItem('biotrajectory_demo_user');
+                if (stored) {
+                  const parsed = JSON.parse(stored);
+                  parsed.role = USER_ROLES.DOCTOR;
+                  parsed.claims = { role: USER_ROLES.DOCTOR };
+                  localStorage.setItem('biotrajectory_demo_user', JSON.stringify(parsed));
+                }
+              } catch {}
+              window.location.href = '/doctor/dashboard';
+            }}
+            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Restore Practice Privileges (Demo)
+          </button>
         </div>
       </div>
     </div>

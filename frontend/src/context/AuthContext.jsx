@@ -107,10 +107,25 @@ export const DEMO_ACCOUNTS = {
   }
 };
 
+export function decorateDemoUser(user) {
+  if (!user) return null;
+  const role = user.role || USER_ROLES.USER;
+  const uid = user.uid || 'demo-user';
+  return {
+    ...user,
+    getIdToken: async () => `demo_token_${role.toLowerCase()}_${uid}`,
+    getIdTokenResult: async () => ({
+      claims: user.claims || { role },
+      token: `demo_token_${role.toLowerCase()}_${uid}`
+    })
+  };
+}
+
 export function getStoredDemoUser() {
   try {
     const raw = localStorage.getItem(DEMO_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    return decorateDemoUser(parsed);
   } catch {
     return null;
   }
@@ -442,11 +457,12 @@ export function AuthProvider({ children }) {
           throw new Error('Invalid email or password.');
         }
 
-        const appUser = { ...demoAccount };
+        const rawUser = { ...demoAccount };
+        const appUser = decorateDemoUser(rawUser);
 
         localStorage.setItem(
           DEMO_STORAGE_KEY,
-          JSON.stringify(appUser)
+          JSON.stringify(rawUser)
         );
 
         setCurrentUser(appUser);

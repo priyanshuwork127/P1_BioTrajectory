@@ -126,8 +126,13 @@ export default function ConnectedDevicesPage() {
                 </span>
               </div>
 
-              <div className="mt-4 rounded-2xl bg-slate-50 dark:bg-[#1F150E] p-4 text-sm text-slate-600 dark:text-slate-300">
-                Device connected, but measurement synchronization is not supported for this device.
+              <div className="mt-4 rounded-2xl bg-slate-50 dark:bg-[#1F150E] p-4 text-sm text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                <span>{device.note || 'Peripheral paired and ready for measurement synchronization.'}</span>
+                {device.batteryLevel && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    Battery {device.batteryLevel}%
+                  </span>
+                )}
               </div>
             </div>
           ))}
