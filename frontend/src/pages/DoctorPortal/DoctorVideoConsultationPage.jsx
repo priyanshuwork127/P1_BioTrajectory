@@ -77,65 +77,6 @@ export default function DoctorVideoConsultationPage() {
   const [newMessage, setNewMessage] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
 
-  // Compute current Google Meet URL for selected target appointment
-  const currentMeetUrl = useMemo(() => {
-    if (!targetAppointment?.id) return "";
-    return getGoogleMeetUrl(targetAppointment.id, customMeetUrl);
-  }, [targetAppointment?.id, customMeetUrl]);
-
-  // Copy Google Meet link with clipboard feedback
-  const handleCopyMeetLink = (url) => {
-    const linkToCopy = url || currentMeetUrl || activeRoomUrl;
-    if (!linkToCopy) return;
-    navigator.clipboard.writeText(linkToCopy).then(() => {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }).catch(() => {});
-  };
-
-  // Start Google Meet Consultation
-  const handleStartGoogleMeet = async () => {
-    if (!targetAppointment?.id) {
-      setError(isHindi ? "कोई वैध अपॉइंटमेंट नहीं मिला।" : "No valid appointment found.");
-      return;
-    }
-
-    if (!isEligibleToStart) {
-      setError(
-        isHindi
-          ? "केवल स्वीकृत वीडियो अपॉइंटमेंट के लिए कॉल शुरू की जा सकती है।"
-          : "Consultations can only be started for accepted video appointments."
-      );
-      return;
-    }
-
-    setError("");
-    setPermissionError("");
-    setCallPhase("starting");
-
-    try {
-      const urlToOpen = currentMeetUrl;
-      const result = await consultationService.startConsultation(
-        targetAppointment.id,
-        "google_meet",
-        urlToOpen
-      );
-
-      const finalUrl = result.roomUrl || urlToOpen;
-      setActiveRoomUrl(finalUrl);
-      setMeetingUrlOverride(targetAppointment.id, finalUrl);
-      setCallStatusOverride(targetAppointment.id, "ACTIVE");
-      setCallPhase("connected");
-
-      // Open Google Meet in new tab/window
-      window.open(finalUrl, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      console.error("Failed to launch Google Meet:", err);
-      setError(err?.message || "Failed to launch Google Meet consultation.");
-      setCallPhase("error");
-    }
-  };
-
   // Check Daily backend configuration on mount
   useEffect(() => {
     let mounted = true;
@@ -260,6 +201,65 @@ export default function DoctorVideoConsultationPage() {
       targetAppointment.type === "video"
     );
   }, [isVerified, targetAppointment]);
+
+  // Compute current Google Meet URL for selected target appointment
+  const currentMeetUrl = useMemo(() => {
+    if (!targetAppointment?.id) return "";
+    return getGoogleMeetUrl(targetAppointment.id, customMeetUrl);
+  }, [targetAppointment?.id, customMeetUrl]);
+
+  // Copy Google Meet link with clipboard feedback
+  const handleCopyMeetLink = (url) => {
+    const linkToCopy = url || currentMeetUrl || activeRoomUrl;
+    if (!linkToCopy) return;
+    navigator.clipboard.writeText(linkToCopy).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }).catch(() => {});
+  };
+
+  // Start Google Meet Consultation
+  const handleStartGoogleMeet = async () => {
+    if (!targetAppointment?.id) {
+      setError(isHindi ? "कोई वैध अपॉइंटमेंट नहीं मिला।" : "No valid appointment found.");
+      return;
+    }
+
+    if (!isEligibleToStart) {
+      setError(
+        isHindi
+          ? "केवल स्वीकृत वीडियो अपॉइंटमेंट के लिए कॉल शुरू की जा सकती है।"
+          : "Consultations can only be started for accepted video appointments."
+      );
+      return;
+    }
+
+    setError("");
+    setPermissionError("");
+    setCallPhase("starting");
+
+    try {
+      const urlToOpen = currentMeetUrl;
+      const result = await consultationService.startConsultation(
+        targetAppointment.id,
+        "google_meet",
+        urlToOpen
+      );
+
+      const finalUrl = result.roomUrl || urlToOpen;
+      setActiveRoomUrl(finalUrl);
+      setMeetingUrlOverride(targetAppointment.id, finalUrl);
+      setCallStatusOverride(targetAppointment.id, "ACTIVE");
+      setCallPhase("connected");
+
+      // Open Google Meet in new tab/window
+      window.open(finalUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error("Failed to launch Google Meet:", err);
+      setError(err?.message || "Failed to launch Google Meet consultation.");
+      setCallPhase("error");
+    }
+  };
 
   const handleRefresh = async () => {
     if (!doctor?.uid) return;
