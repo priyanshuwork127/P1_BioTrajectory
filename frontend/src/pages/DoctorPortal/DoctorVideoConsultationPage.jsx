@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertCircle,
   HelpCircle,
+  ClipboardList,
 } from "lucide-react";
 
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
