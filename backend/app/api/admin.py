@@ -20,7 +20,8 @@ import os
 
 from datetime import datetime, timezone, timedelta
 from statistics import mean
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
 from firebase_admin import auth, firestore
@@ -889,6 +890,7 @@ async def get_population_medical_aggregates(
                 "Population medical analytics are temporarily "
                 "unavailable."
             ),
+        )
 class AddAdminRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: str = Field(..., min_length=5, max_length=150)

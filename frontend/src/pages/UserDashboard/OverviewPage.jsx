@@ -215,6 +215,13 @@ export default function OverviewPage() {
 
   useEffect(() => {
     loadReadings();
+    const handleReadingAdded = () => {
+      loadReadings(true);
+    };
+    window.addEventListener('biotraj_reading_added', handleReadingAdded);
+    return () => {
+      window.removeEventListener('biotraj_reading_added', handleReadingAdded);
+    };
   }, [loadReadings]);
 
   const { vitals, latestByType } = useMemo(

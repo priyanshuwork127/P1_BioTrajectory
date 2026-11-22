@@ -130,6 +130,11 @@ class Settings:
         "secrets/firebase-service-account.json"
     ).strip()
 
+    # Daily.co Video Consultations
+    DAILY_API_KEY: str = os.getenv("DAILY_API_KEY", "").strip()
+    DAILY_DOMAIN: str = os.getenv("DAILY_DOMAIN", "").strip()
+    DAILY_REST_URL: str = "https://api.daily.co/v1"
+
     # Optional family invitation email delivery (Resend)
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "").strip()
     FAMILY_INVITE_FROM: str = os.getenv("FAMILY_INVITE_FROM", "").strip()
@@ -170,6 +175,19 @@ class Settings:
         """Backward-compatible alias for Groq configuration."""
 
         return self.is_groq_configured
+
+    @property
+    def is_daily_configured(self) -> bool:
+        """Check whether Daily.co API key is properly configured."""
+        return bool(
+            self.DAILY_API_KEY
+            and self.DAILY_API_KEY.strip().lower() not in {
+                "your_daily_api_key_here",
+                "your_api_key",
+                "placeholder",
+                "",
+            }
+        )
 
     @property
     def is_production_firebase_configured(self) -> bool:

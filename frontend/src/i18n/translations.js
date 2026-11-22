@@ -210,6 +210,33 @@ export const translations = {
       status: 'Status:'
     },
 
+    // ---------------- VIDEO CONSULTATION ----------------
+    consultation: {
+      videoConsultation: 'Video Consultation',
+      consultationWorkspace: 'Consultation Workspace',
+      startConsultation: 'Start Consultation',
+      startingConsultation: 'Starting Secure Room...',
+      joinConsultation: 'Join Video Consultation',
+      joiningConsultation: 'Joining Consultation...',
+      endConsultation: 'End Consultation',
+      callActive: 'Consultation Active',
+      doctorStartedCall: 'Doctor has started the video consultation!',
+      doctorWaiting: 'Waiting for doctor to begin consultation...',
+      selectPatientPrompt: 'Select an accepted video appointment to start.',
+      noAcceptedVideoApt: 'No accepted video appointments available right now.',
+      cameraMicPermission: 'Please allow camera and microphone access when prompted.',
+      cameraPermissionDenied: 'Camera or microphone permission was denied. Please check your browser site settings.',
+      callEndedSuccess: 'The consultation session has ended.',
+      dailyNotConfigured: 'Daily.co video consultation provider is not configured. Add DAILY_API_KEY to backend/.env.',
+      setupInstructions: 'To enable real Daily video calls, register at daily.co, copy your API key, and set DAILY_API_KEY in backend/.env.',
+      sessionNotes: 'Clinical Consultation Notes',
+      saveNotes: 'Save Notes',
+      connectingProvider: 'Connecting to secure video room...',
+      connectedNotice: 'Connected via Daily Prebuilt video room.',
+      onlyAcceptedNotice: 'Video calls can only be started for accepted video appointments.',
+      inPersonNotice: 'This is an in-person clinic appointment.'
+    },
+
     // ---------------- ADMIN DASHBOARD ----------------
     admin: {
       portalTitle: 'BioTrajectory Administrator Control',
@@ -578,6 +605,33 @@ export const translations = {
       patientDashboardLink: 'मरीज डैशबोर्ड',
       signOut: 'लॉगआउट',
       status: 'स्थिति:'
+    },
+
+    // ---------------- VIDEO CONSULTATION ----------------
+    consultation: {
+      videoConsultation: 'वीडियो परामर्श',
+      consultationWorkspace: 'परामर्श कार्यक्षेत्र',
+      startConsultation: 'परामर्श शुरू करें',
+      startingConsultation: 'सुरक्षित रूम शुरू हो रहा है...',
+      joinConsultation: 'वीडियो परामर्श में शामिल हों',
+      joiningConsultation: 'परामर्श में शामिल हो रहे हैं...',
+      endConsultation: 'परामर्श समाप्त करें',
+      callActive: 'परामर्श सक्रिय है',
+      doctorStartedCall: 'डॉक्टर ने वीडियो परामर्श शुरू कर दिया है!',
+      doctorWaiting: 'डॉक्टर द्वारा परामर्श शुरू करने की प्रतीक्षा है...',
+      selectPatientPrompt: 'शुरू करने के लिए एक स्वीकृत वीडियो नियुक्ति चुनें।',
+      noAcceptedVideoApt: 'वर्तमान में कोई स्वीकृत वीडियो नियुक्ति उपलब्ध नहीं है।',
+      cameraMicPermission: 'कृपया संकेत मिलने पर कैमरा और माइक्रोफ़ोन की अनुमति दें।',
+      cameraPermissionDenied: 'कैमरा या माइक्रोफ़ोन की अनुमति अस्वीकार कर दी गई। कृपया अपनी ब्राउज़र सेटिंग्स जांचें।',
+      callEndedSuccess: 'परामर्श सत्र समाप्त हो गया है।',
+      dailyNotConfigured: 'Daily.co वीडियो प्रदाता कॉन्फ़िगर नहीं है। backend/.env में DAILY_API_KEY जोड़ें।',
+      setupInstructions: 'वास्तविक Daily कॉल सक्षम करने के लिए, daily.co पर रजिस्टर करें और backend/.env में DAILY_API_KEY सेट करें।',
+      sessionNotes: 'नैदानिक परामर्श नोट्स',
+      saveNotes: 'नोट्स सहेजें',
+      connectingProvider: 'सुरक्षित वीडियो रूम से कनेक्ट हो रहा है...',
+      connectedNotice: 'Daily Prebuilt वीडियो रूम से कनेक्टेड।',
+      onlyAcceptedNotice: 'वीडियो कॉल केवल स्वीकृत वीडियो नियुक्तियों के लिए शुरू की जा सकती हैं।',
+      inPersonNotice: 'यह क्लिनिक की प्रत्यक्ष नियुक्ति है।'
     },
 
     // ---------------- ADMIN DASHBOARD ----------------

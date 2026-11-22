@@ -22,6 +22,8 @@ import {
 
 import { approvedDoctorService } from "../../services/approvedDoctorService";
 import { appointmentService } from "../../services/appointmentService";
+import { consultationService } from "../../services/consultationService";
+import DailyIframe from "@daily-co/daily-js";
 import { getPatientPriorityStatus, subscribeToPriorityChanges } from "../../services/patientPriorityService";
 import DisclaimerBanner from "../../components/common/DisclaimerBanner";
 
@@ -111,6 +113,98 @@ export default function DoctorConsultationPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [historyFilter, setHistoryFilter] = useState("ALL");
+
+  // In-App Video Consultation (Daily Prebuilt)
+  const [activeVideoAppointment, setActiveVideoAppointment] = useState(null);
+  const [patientCallPhase, setPatientCallPhase] = useState("idle"); // idle | joining | connected | ended | error
+  const [patientCallError, setPatientCallError] = useState("");
+  const patientCallContainerRef = React.useRef(null);
+  const patientDailyFrameRef = React.useRef(null);
+
+  const handlePatientJoinCall = async (appointment) => {
+    setActiveVideoAppointment(appointment);
+    setPatientCallPhase("joining");
+    setPatientCallError("");
+
+    try {
+      // Fetch attendee token from backend Daily API
+      const result = await consultationService.joinConsultation(appointment.id);
+
+      if (patientDailyFrameRef.current) {
+        try {
+          patientDailyFrameRef.current.destroy();
+        } catch {
+          // ignore
+        }
+      }
+
+      // Small delay to allow container mount
+      setTimeout(async () => {
+        if (!patientCallContainerRef.current) return;
+
+        const frame = DailyIframe.createFrame(patientCallContainerRef.current, {
+          iframeStyle: {
+            width: "100%",
+            height: "100%",
+            border: "0",
+            borderRadius: "16px",
+            minHeight: "420px",
+          },
+          showLeaveButton: true,
+          showFullscreenButton: true,
+        });
+
+        patientDailyFrameRef.current = frame;
+
+        frame.on("joining-meeting", () => setPatientCallPhase("joining"));
+        frame.on("joined-meeting", () => setPatientCallPhase("connected"));
+        frame.on("left-meeting", () => handlePatientLeaveCall());
+        frame.on("camera-error", (e) => {
+          setPatientCallError("Camera or microphone permission error: " + (e?.errorMsg?.errorMsg || e?.errorMsg || "Denied"));
+        });
+        frame.on("error", (e) => {
+          setPatientCallError(e?.errorMsg || "Failed to establish video connection.");
+          setPatientCallPhase("error");
+        });
+
+        await frame.join({
+          url: result.roomUrl,
+          token: result.token,
+        });
+      }, 100);
+    } catch (err) {
+      console.error("Failed to join video consultation:", err);
+      setPatientCallError(err?.message || "Could not join video consultation.");
+      setPatientCallPhase("error");
+    }
+  };
+
+  const handlePatientLeaveCall = () => {
+    if (patientDailyFrameRef.current) {
+      try {
+        patientDailyFrameRef.current.destroy();
+      } catch {
+        // ignore
+      }
+      patientDailyFrameRef.current = null;
+    }
+    setActiveVideoAppointment(null);
+    setPatientCallPhase("idle");
+    setPatientCallError("");
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (patientDailyFrameRef.current) {
+        try {
+          patientDailyFrameRef.current.destroy();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   // Booking
   const [selectedDoctor, setSelectedDoctor] = useState(null);
@@ -846,6 +940,67 @@ export default function DoctorConsultationPage() {
                       </div>
                     )}
 
+                    {/* Video Consultation Action Card for Accepted Video Appointments */}
+                    {appointment.status === "ACCEPTED" && appointment.type === "video" && (
+                      <div className="mt-5 p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              appointment.callStatus === "ACTIVE"
+                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 animate-pulse"
+                                : "bg-purple-100 dark:bg-purple-900/40 text-purple-600"
+                            }`}
+                          >
+                            <Video className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                                {appointment.callStatus === "ACTIVE"
+                                  ? isHindi
+                                    ? "डॉक्टर ने वीडियो परामर्श शुरू कर दिया है!"
+                                    : "Doctor has started the video consultation!"
+                                  : isHindi
+                                  ? "स्वीकृत वीडियो परामर्श"
+                                  : "Accepted Video Consultation"}
+                              </h4>
+                              {appointment.callStatus === "ACTIVE" && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                              {appointment.callStatus === "ACTIVE"
+                                ? isHindi
+                                  ? "आपका डॉक्टर सुरक्षित वीडियो रूम में आपकी प्रतीक्षा कर रहा है।"
+                                  : "Your doctor is in the room waiting for you to join."
+                                : isHindi
+                                ? "जैसे ही डॉक्टर कॉल शुरू करेंगे, यहां 'जॉइन' बटन लाइव हो जाएगा।"
+                                : "When your doctor clicks Start, the join button will activate in real time."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePatientJoinCall(appointment)}
+                          className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all shrink-0 ${
+                            appointment.callStatus === "ACTIVE"
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse"
+                              : "bg-purple-600 hover:bg-purple-700 text-white"
+                          }`}
+                        >
+                          <Video className="w-4 h-4" />
+                          {appointment.callStatus === "ACTIVE"
+                            ? isHindi
+                              ? "परामर्श में शामिल हों (Join Live Call)"
+                              : "Join Live Consultation"
+                            : isHindi
+                            ? "परामर्श कक्ष में प्रवेश करें"
+                            : "Join Consultation Room"}
+                        </button>
+                      </div>
+                    )}
+
                     <div className="mt-5 flex items-start gap-2 text-sm text-slate-600 dark:text-slate-400">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <p>{getStatusDescription(appointment.status)}</p>
@@ -990,6 +1145,74 @@ export default function DoctorConsultationPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Daily Video Consultation Modal for Patient */}
+      {activeVideoAppointment && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full p-5 shadow-2xl flex flex-col space-y-4 max-h-[95vh] overflow-hidden">
+            <div className="flex items-center justify-between text-white pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-600/30 flex items-center justify-center text-purple-400">
+                  <Video className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">
+                    {activeVideoAppointment.doctorName || "Doctor Consultation"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    In-app video consultation via Daily Prebuilt
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePatientLeaveCall}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all"
+                title="Close video call"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {patientCallError && (
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{patientCallError}</span>
+              </div>
+            )}
+
+            {/* Embedded Daily Frame Container */}
+            <div
+              ref={patientCallContainerRef}
+              className="w-full aspect-video min-h-[440px] rounded-2xl overflow-hidden bg-black flex items-center justify-center relative"
+            >
+              {patientCallPhase === "joining" && (
+                <div className="text-center text-slate-400">
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" />
+                  <p className="text-sm font-semibold text-white">Connecting to secure consultation room...</p>
+                  <p className="text-xs text-slate-400 mt-1">Please allow camera and mic access when prompted</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                Zero-knowledge private token session (Daily.co)
+              </span>
+
+              <button
+                type="button"
+                onClick={handlePatientLeaveCall}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition-all"
+              >
+                Leave Call
+              </button>
+            </div>
           </div>
         </div>
       )}

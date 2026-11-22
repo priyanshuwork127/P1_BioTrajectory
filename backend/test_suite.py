@@ -36,7 +36,8 @@ class TestBioTrajectoryIntegration(unittest.TestCase):
 
         # Simulate a verified Firebase user for endpoint integration tests.
         # This avoids requiring a real Firebase ID token in unit tests.
-        app.dependency_overrides[get_current_user] = lambda: {
+        fastapi_app = getattr(app, "app", app)
+        fastapi_app.dependency_overrides[get_current_user] = lambda: {
             "uid": "test-user-1",
             "role": "USER"
         }
@@ -44,11 +45,13 @@ class TestBioTrajectoryIntegration(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         # Prevent authentication overrides leaking into other test modules.
-        app.dependency_overrides.clear()
+        fastapi_app = getattr(app, "app", app)
+        fastapi_app.dependency_overrides.clear()
 
     def test_01_fastapi_startup_and_routes(self):
         """1. Verify FastAPI startup and registered endpoints."""
-        paths = list(app.openapi()["paths"].keys())
+        fastapi_app = getattr(app, "app", app)
+        paths = list(fastapi_app.openapi()["paths"].keys())
         self.assertIn("/health", paths)
         self.assertIn("/api/chat", paths)
         self.assertIn("/api/history", paths)
@@ -224,7 +227,8 @@ class TestBioTrajectoryIntegration(unittest.TestCase):
     def test_10_unauthenticated_health_access_is_rejected(self):
         """10. Verify unauthenticated users cannot access personal health records."""
         # Temporarily remove the authenticated-user override.
-        original_override = app.dependency_overrides.pop(
+        fastapi_app = getattr(app, "app", app)
+        original_override = fastapi_app.dependency_overrides.pop(
             get_current_user, None
         )
 
@@ -234,7 +238,7 @@ class TestBioTrajectoryIntegration(unittest.TestCase):
         finally:
             # Restore the override for the remaining integration tests.
             if original_override is not None:
-                app.dependency_overrides[get_current_user] = original_override
+                fastapi_app.dependency_overrides[get_current_user] = original_override
 
         print("✓ Test 10: Unauthenticated health access rejected.")
 
