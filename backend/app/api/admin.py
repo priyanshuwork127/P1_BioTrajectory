@@ -17,10 +17,10 @@ import logging
 import calendar
 import math
 import os
-from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
 from statistics import mean
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException
 from firebase_admin import auth, firestore

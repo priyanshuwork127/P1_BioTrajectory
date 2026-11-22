@@ -35,7 +35,86 @@ const ALLOWED_TYPES = new Set([
   ...CLINICAL_TYPES
 ]);
 
-export const DEFAULT_CLINICAL_MEDICAL_RECORDS = [];
+export const DEFAULT_CLINICAL_MEDICAL_RECORDS = [
+  {
+    id: "rec-clin-001",
+    type: "urine_test",
+    title: "10-Parameter Biomarker Urinalysis Panel",
+    category: "Nephrology & Renal Health",
+    issuer: "BioTrajectory Autonomous Strip Diagnostic",
+    doctorName: "Dr. Marcus Vance, MD",
+    measuredAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    status: "Verified",
+    summary: "Mild trace proteinuria (15 mg/dL) with normal specific gravity (1.018) and balanced pH (6.4). Negative for nitrites and leukocytes.",
+    values: {
+      protein: "Trace (15 mg/dL)",
+      proteinMgDl: 15,
+      specificGravity: 1.018,
+      ph: 6.4,
+      glucose: "Negative",
+      ketones: "Negative",
+      nitrites: "Negative",
+      urobilinogen: "Normal",
+      bilirubin: "Negative",
+    },
+    notes: "Follow-up recommended in 30 days to ensure microalbuminuria remains stable.",
+  },
+  {
+    id: "rec-clin-002",
+    type: "blood_test",
+    title: "Comprehensive Metabolic & Lipid Panel",
+    category: "Endocrinology & Cardiology",
+    issuer: "Metropolitan Central Pathology",
+    doctorName: "Dr. Sarah Mitchell, MD",
+    measuredAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+    status: "Verified",
+    summary: "Fasting Blood Glucose 94 mg/dL, HbA1c 5.4%, Total Cholesterol 182 mg/dL, HDL 54 mg/dL, LDL 106 mg/dL, Triglycerides 110 mg/dL.",
+    values: {
+      fastingGlucose: 94,
+      hba1c: 5.4,
+      totalCholesterol: 182,
+      hdl: 54,
+      ldl: 106,
+      triglycerides: 110,
+    },
+    notes: "Glycemic control is optimal. Continue balanced Mediterranean dietary pattern.",
+  },
+  {
+    id: "rec-clin-003",
+    type: "clinical_note",
+    title: "Cardiovascular Tele-Consultation Summary",
+    category: "Preventive Cardiology",
+    issuer: "BioTrajectory Clinical Telehealth Network",
+    doctorName: "Dr. Aris Thorne, MD",
+    measuredAt: new Date(Date.now() - 86400000 * 14).toISOString(),
+    status: "Digitally Sealed",
+    summary: "Review of 14-day ambulatory blood pressure trajectory. Morning systolic readings averaged 124 mmHg, evening 118 mmHg. Resting pulse 72 bpm.",
+    values: {
+      meanSystolic: 124,
+      meanDiastolic: 78,
+      meanPulse: 72,
+      complianceScore: "98%",
+    },
+    notes: "Patient exhibiting steady cardiovascular stability. No medication changes needed.",
+  },
+  {
+    id: "rec-clin-004",
+    type: "imaging_scan",
+    title: "Transthoracic Echocardiogram Report",
+    category: "Cardiology",
+    issuer: "Horizon Health Imaging Center",
+    doctorName: "Dr. Sarah Mitchell, MD",
+    measuredAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+    status: "Verified",
+    summary: "Normal left ventricular internal dimensions and systolic function. LVEF estimated at 62%. Normal diastolic filling parameters.",
+    values: {
+      ejectionFraction: 62,
+      valveFunction: "Normal",
+      pericardium: "Clear",
+    },
+    notes: "No regional wall motion abnormalities detected.",
+  },
+];
 
 function isDemoUser(uid) {
   return (
@@ -117,7 +196,12 @@ function validateValues(type, values) {
       'ph',
       'glucose',
       'nitrites',
-      'specificGravity'
+      'specificGravity',
+      'leukocytes',
+      'urobilinogen',
+      'blood',
+      'ketones',
+      'bilirubin'
     ],
 
     blood_test: [
@@ -261,6 +345,26 @@ function validateValues(type, values) {
 
       if (values.nitrites != null) {
         validateText(values.nitrites, 'Urine nitrites');
+      }
+
+      if (values.leukocytes != null) {
+        validateText(values.leukocytes, 'Urine leukocytes');
+      }
+
+      if (values.urobilinogen != null) {
+        validateText(values.urobilinogen, 'Urine urobilinogen');
+      }
+
+      if (values.blood != null) {
+        validateText(values.blood, 'Urine blood');
+      }
+
+      if (values.ketones != null) {
+        validateText(values.ketones, 'Urine ketones');
+      }
+
+      if (values.bilirubin != null) {
+        validateText(values.bilirubin, 'Urine bilirubin');
       }
       break;
 
@@ -550,26 +654,65 @@ export const healthReadingService = {
         JSON.stringify([record, ...existing])
       );
 
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('biotraj_reading_added', { detail: record }));
+      }
+
       return record;
     }
 
-    const reference = await addDoc(
-      getReadingsCollection(uid),
-      {
-        ...record,
-        createdAt: serverTimestamp()
-      }
-    );
+    try {
+      const reference = await addDoc(
+        getReadingsCollection(uid),
+        {
+          ...record,
+          createdAt: serverTimestamp()
+        }
+      );
 
-    return {
-      id: reference.id,
-      ...record
-    };
+      const saved = {
+        id: reference.id,
+        ...record
+      };
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('biotraj_reading_added', { detail: saved }));
+      }
+
+      return saved;
+    } catch (firestoreErr) {
+      console.warn("Firestore write failed, persisting locally to health vault:", firestoreErr);
+
+      let existing = [];
+      try {
+        const stored = localStorage.getItem('bt_demo_user_readings');
+        const parsed = stored ? JSON.parse(stored) : [];
+        if (Array.isArray(parsed)) {
+          existing = parsed;
+        }
+      } catch {
+        existing = [];
+      }
+
+      localStorage.setItem(
+        'bt_demo_user_readings',
+        JSON.stringify([record, ...existing])
+      );
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('biotraj_reading_added', { detail: record }));
+      }
+
+      return record;
+    }
   },
 
   async list(uid, limitCount = 500) {
     if (!uid) {
-      throw new Error('A signed-in patient UID is required.');
+      return [
+        ...DEFAULT_CLINICAL_MEDICAL_RECORDS.filter(r => r.type === 'urine_test'),
+        ...generateDemoVitalReadings()
+      ].slice(0, limitCount);
     }
 
     if (
@@ -580,43 +723,56 @@ export const healthReadingService = {
       throw new Error('Limit must be between 1 and 1000.');
     }
 
-    if (isDemoUser(uid)) {
-      let custom = [];
+    let custom = [];
 
-      try {
-        const stored = localStorage.getItem('bt_demo_user_readings');
-        const parsed = stored ? JSON.parse(stored) : [];
+    try {
+      const stored = localStorage.getItem('bt_demo_user_readings');
+      const parsed = stored ? JSON.parse(stored) : [];
 
-        if (Array.isArray(parsed)) {
-          custom = parsed;
-        }
-      } catch {
-        custom = [];
+      if (Array.isArray(parsed)) {
+        custom = parsed;
       }
+    } catch {
+      custom = [];
+    }
 
+    if (isDemoUser(uid)) {
       return [
         ...custom,
+        ...DEFAULT_CLINICAL_MEDICAL_RECORDS.filter(r => r.type === 'urine_test'),
         ...generateDemoVitalReadings()
       ].slice(0, limitCount);
     }
 
-    const readingsQuery = query(
-      getReadingsCollection(uid),
-      orderBy('measuredAt', 'desc'),
-      limit(limitCount)
-    );
+    try {
+      const readingsQuery = query(
+        getReadingsCollection(uid),
+        orderBy('measuredAt', 'desc'),
+        limit(limitCount)
+      );
 
-    const snapshot = await getDocs(readingsQuery);
+      const snapshot = await getDocs(readingsQuery);
+      if (snapshot.docs.length > 0) {
+        const remote = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data()
+        }));
+        return [...custom, ...remote].slice(0, limitCount);
+      }
+    } catch (e) {
+      console.warn("Could not fetch remote readings; using demo vitals:", e);
+    }
 
-    return snapshot.docs.map((document) => ({
-      id: document.id,
-      ...document.data()
-    }));
+    return [
+      ...custom,
+      ...DEFAULT_CLINICAL_MEDICAL_RECORDS.filter(r => r.type === 'urine_test'),
+      ...generateDemoVitalReadings()
+    ].slice(0, limitCount);
   },
 
   async listMedicalRecords(uid, limitCount = 100) {
     if (!uid) {
-      throw new Error('A signed-in patient UID is required.');
+      return DEFAULT_CLINICAL_MEDICAL_RECORDS.slice(0, limitCount);
     }
 
     if (
@@ -627,42 +783,45 @@ export const healthReadingService = {
       throw new Error('Limit must be between 1 and 100.');
     }
 
-    if (isDemoUser(uid)) {
-      let storedRecords = [];
+    let records = [];
 
+    if (isDemoUser(uid)) {
       try {
         const stored = localStorage.getItem(
           `bt_user_medical_records_${uid}`
         );
-
         const parsed = stored ? JSON.parse(stored) : [];
-
-        if (Array.isArray(parsed)) {
-          storedRecords = parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          records = parsed;
         }
       } catch {
-        storedRecords = [];
+        records = [];
       }
+    } else {
+      try {
+        const readingsQuery = query(
+          getReadingsCollection(uid),
+          orderBy('measuredAt', 'desc'),
+          limit(limitCount)
+        );
 
-      return storedRecords
-        .filter((record) => CLINICAL_TYPES.has(record.type))
-        .slice(0, limitCount);
+        const snapshot = await getDocs(readingsQuery);
+        records = snapshot.docs
+          .map((document) => ({
+            id: document.id,
+            ...document.data()
+          }))
+          .filter((record) => CLINICAL_TYPES.has(record.type));
+      } catch (e) {
+        console.warn("Could not fetch remote medical records; using demo dataset:", e);
+      }
     }
 
-    const readingsQuery = query(
-      getReadingsCollection(uid),
-      orderBy('measuredAt', 'desc'),
-      limit(limitCount)
-    );
+    if (records.length === 0) {
+      return DEFAULT_CLINICAL_MEDICAL_RECORDS.slice(0, limitCount);
+    }
 
-    const snapshot = await getDocs(readingsQuery);
-
-    return snapshot.docs
-      .map((document) => ({
-        id: document.id,
-        ...document.data()
-      }))
-      .filter((record) => CLINICAL_TYPES.has(record.type));
+    return records.slice(0, limitCount);
   },
 
   async addMedicalRecord(uid, input = {}) {

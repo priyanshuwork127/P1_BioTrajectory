@@ -1,5 +1,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -466,15 +467,28 @@ export default function DoctorAppointmentsPage() {
                   )}
 
                   {apt.status === "ACCEPTED" && (
-                    <button
-                      disabled={updatingId === apt.id}
-                      onClick={() =>
-                        handleUpdateStatus(apt.id, "COMPLETED")
-                      }
-                      className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs disabled:opacity-50"
-                    >
-                      Mark completed
-                    </button>
+                    <>
+                      {apt.type === "video" && (
+                        <Link
+                          to={`/doctor/video-consultation?appointmentId=${apt.id}&patientId=${apt.patientId}`}
+                          className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                        >
+                          <Video size={14} />
+                          {apt.callStatus === "ACTIVE"
+                            ? isHindi ? "परामर्श चालू है" : "Consultation Live"
+                            : isHindi ? "वीडियो परामर्श शुरू करें" : "Start Video Call"}
+                        </Link>
+                      )}
+                      <button
+                        disabled={updatingId === apt.id}
+                        onClick={() =>
+                          handleUpdateStatus(apt.id, "COMPLETED")
+                        }
+                        className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs disabled:opacity-50"
+                      >
+                        Mark completed
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
