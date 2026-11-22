@@ -100,7 +100,6 @@ async def create_or_get_daily_room(room_name: str) -> Dict[str, Any]:
             "exp": exp_timestamp,
             "enable_chat": True,
             "enable_screenshare": True,
-            "enable_recording": "off",  # Recording off by default
             "start_video_off": False,
             "start_audio_off": False,
             "eject_at_room_exp": True,
@@ -159,7 +158,6 @@ async def create_meeting_token(
             "is_owner": is_owner,
             "user_name": user_name,
             "exp": int(time.time()) + expiry_seconds,
-            "enable_recording": "off",
         }
     }
 
