@@ -6,37 +6,12 @@
  */
 
 import { auth } from "./firebase";
+import { generateGoogleMeetCode, getGoogleMeetUrl } from "./appointmentService";
+
+export { generateGoogleMeetCode, getGoogleMeetUrl };
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
-
-/**
- * Generate a standard 3-4-3 Google Meet room code (e.g. abc-defg-hij)
- */
-export function generateGoogleMeetCode(appointmentId) {
-  let hash = 0;
-  const str = `biotraj-gmeet-${appointmentId || "default"}`;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const pos = Math.abs(hash).toString(36).padEnd(10, "abcde").slice(0, 10);
-  return `${pos.slice(0, 3)}-${pos.slice(3, 7)}-${pos.slice(7, 10)}`;
-}
-
-/**
- * Get or format a Google Meet URL for the appointment
- */
-export function getGoogleMeetUrl(appointmentId, customUrl = null) {
-  if (customUrl && typeof customUrl === "string" && customUrl.trim().startsWith("http")) {
-    return customUrl.trim();
-  }
-  try {
-    const stored = localStorage.getItem(`biotraj_meet_url_${appointmentId}`);
-    if (stored) return stored;
-  } catch {}
-  return `https://meet.google.com/${generateGoogleMeetCode(appointmentId)}`;
-}
 
 async function getAuthHeader() {
   const user = auth?.currentUser;

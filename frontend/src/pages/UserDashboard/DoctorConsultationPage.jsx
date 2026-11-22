@@ -142,10 +142,74 @@ export default function DoctorConsultationPage() {
     }).catch(() => {});
   };
 
-  const handleOpenGoogleMeet = (appointment) => {
-    const meetUrl = appointment.meetingUrl || getMeetingUrlOverride(appointment.id) || getGoogleMeetUrl(appointment.id);
+  const handleOpenGoogleMeet = async (appointment) => {
+    // 1. Check local override or appointment property first
+    let meetUrl = getMeetingUrlOverride(appointment.id) || appointment.meetingUrl;
+    // 2. Fetch latest verified Google Meet link from backend if available
+    try {
+      const res = await consultationService.joinConsultation(appointment.id, "google_meet");
+      if (res?.roomUrl) {
+        meetUrl = res.roomUrl;
+      }
+    } catch (e) {
+      console.warn("Could not fetch remote meet URL on join:", e);
+    }
+    // 3. Fallback to deterministic appointment Google Meet URL (100% matched with doctor)
+    if (!meetUrl) {
+      meetUrl = getGoogleMeetUrl(appointment.id);
+    }
     window.open(meetUrl, "_blank", "noopener,noreferrer");
   };
+
+  // Sync Google Meet link and call status changes in real time across tabs
+  useEffect(() => {
+    const handleUrlChange = (e) => {
+      const { appointmentId, url } = e.detail || {};
+      if (appointmentId && url) {
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === appointmentId ? { ...a, meetingUrl: url } : a))
+        );
+      }
+    };
+
+    const handleStatusChange = (e) => {
+      const { appointmentId, status, meetUrl } = e.detail || {};
+      if (appointmentId) {
+        setAppointments((prev) =>
+          prev.map((a) =>
+            a.id === appointmentId
+              ? { ...a, callStatus: status, ...(meetUrl ? { meetingUrl: meetUrl } : {}) }
+              : a
+          )
+        );
+      }
+    };
+
+    const handleStorage = (e) => {
+      if (e.key && e.key.startsWith("biotraj_meet_url_")) {
+        const aptId = e.key.replace("biotraj_meet_url_", "");
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === aptId ? { ...a, meetingUrl: e.newValue } : a))
+        );
+      }
+      if (e.key && e.key.startsWith("biotraj_call_status_")) {
+        const aptId = e.key.replace("biotraj_call_status_", "");
+        setAppointments((prev) =>
+          prev.map((a) => (a.id === aptId ? { ...a, callStatus: e.newValue } : a))
+        );
+      }
+    };
+
+    window.addEventListener("biotraj_meet_url_change", handleUrlChange);
+    window.addEventListener("biotraj_call_status_change", handleStatusChange);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("biotraj_meet_url_change", handleUrlChange);
+      window.removeEventListener("biotraj_call_status_change", handleStatusChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   const handlePatientJoinCall = async (appointment) => {
     setActiveVideoAppointment(appointment);
