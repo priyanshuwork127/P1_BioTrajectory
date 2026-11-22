@@ -21,6 +21,7 @@ from app.api.admin import router as admin_router
 from app.api.family import router as family_router
 from app.api.reports import router as ai_reports_router
 from app.api.consultation import router as consultation_router
+from app.api.diseases import router as diseases_router
 
 from app.core.config import settings
 from app.core.security import (
@@ -183,6 +184,7 @@ app.include_router(family_router)
 app.include_router(qr_router)
 app.include_router(ai_reports_router)
 app.include_router(consultation_router)
+app.include_router(diseases_router)
 
 
 # Wrap the complete FastAPI application so CORS headers

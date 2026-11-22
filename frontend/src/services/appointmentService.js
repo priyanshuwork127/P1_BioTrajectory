@@ -70,6 +70,8 @@ export function getDemoAppointments(doctorUid, doctorName = "Dr. Sarah Mitchell"
       appointmentTime: "10:30 AM",
       type: "video",
       status: "ACCEPTED",
+      provider: "google_meet",
+      meetingUrl: getGoogleMeetUrl("apt-video-alex"),
       callStatus: getCallStatusOverride("apt-video-alex") || "IDLE",
       reason: "Post-chemotherapy secondary hypertension follow-up & morning BP spike review.",
     },
@@ -83,6 +85,8 @@ export function getDemoAppointments(doctorUid, doctorName = "Dr. Sarah Mitchell"
       appointmentTime: "02:00 PM",
       type: "video",
       status: "ACCEPTED",
+      provider: "google_meet",
+      meetingUrl: getGoogleMeetUrl("apt-video-elena"),
       callStatus: getCallStatusOverride("apt-video-elena") || "IDLE",
       reason: "Persistent post-viral fatigue, iron saturation trajectory & afternoon brain fog consultation.",
     },
@@ -96,6 +100,8 @@ export function getDemoAppointments(doctorUid, doctorName = "Dr. Sarah Mitchell"
       appointmentTime: "11:15 AM",
       type: "video",
       status: "PENDING",
+      provider: "google_meet",
+      meetingUrl: getGoogleMeetUrl("apt-pending-rahul"),
       callStatus: "IDLE",
       reason: "Occasional morning occipital headache, mild stress from work, home BP logging review.",
     },
@@ -143,6 +149,43 @@ export function setCallStatusOverride(appointmentId, status) {
   } catch (e) {
     console.warn("Failed to persist call status override:", e);
   }
+}
+
+export function getMeetingUrlOverride(appointmentId) {
+  try {
+    return localStorage.getItem(`biotraj_meet_url_${appointmentId}`) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setMeetingUrlOverride(appointmentId, url) {
+  try {
+    localStorage.setItem(`biotraj_meet_url_${appointmentId}`, url);
+    window.dispatchEvent(new CustomEvent("biotraj_meet_url_change", { detail: { appointmentId, url } }));
+  } catch (e) {
+    console.warn("Failed to persist meeting url override:", e);
+  }
+}
+
+export function generateGoogleMeetCode(appointmentId) {
+  let hash = 0;
+  const str = `biotraj-gmeet-${appointmentId || "consultation"}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const pos = Math.abs(hash).toString(36).padEnd(10, "abcde").slice(0, 10);
+  return `${pos.slice(0, 3)}-${pos.slice(3, 7)}-${pos.slice(7, 10)}`;
+}
+
+export function getGoogleMeetUrl(appointmentId, customUrl = null) {
+  if (customUrl && typeof customUrl === "string" && customUrl.trim().startsWith("http")) {
+    return customUrl.trim();
+  }
+  const override = getMeetingUrlOverride(appointmentId);
+  if (override) return override;
+  return `https://meet.google.com/${generateGoogleMeetCode(appointmentId)}`;
 }
 
 function sortAppointments(appointments = []) {

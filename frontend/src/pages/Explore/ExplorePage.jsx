@@ -12,13 +12,10 @@ import {
   ExternalLink,
   MapPin,
   Calendar,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
-import {
-  DISEASES_DATABASE,
-  PRIMARY_CATEGORIES,
-  SUB_CATEGORIES
-} from '../../data/diseasesData';
+import { diseaseService } from '../../services/diseaseService';
 import { DatasetService } from '../../services/datasetService';
 import { getDiseaseImages } from '../../data/diseaseImages';
 import { useLanguage } from '../../context/LanguageContext';
@@ -31,6 +28,13 @@ export default function ExplorePage() {
   const [selectedPrimaryCategory, setSelectedPrimaryCategory] = useState('All Conditions');
   const [selectedSubCategory, setSelectedSubCategory] = useState('All');
 
+  // Asynchronous diseases dataset state
+  const [diseases, setDiseases] = useState([]);
+  const [primaryCategories, setPrimaryCategories] = useState(['All Conditions']);
+  const [subCategories, setSubCategories] = useState(['All']);
+  const [isLoadingDiseases, setIsLoadingDiseases] = useState(true);
+  const [diseaseError, setDiseaseError] = useState(null);
+
   // Dataset explorer filter state
   const [datasetSearch, setDatasetSearch] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('All');
@@ -39,6 +43,43 @@ export default function ExplorePage() {
   const [datasetsList, setDatasetsList] = useState([]);
   const [_isLoadingDatasets, setIsLoadingDatasets] = useState(false);
   const isMountedRef = React.useRef(true);
+
+  // Load curated disease knowledgebase via data service
+  const loadDiseases = React.useCallback(async (refresh = false) => {
+    setIsLoadingDiseases(true);
+    setDiseaseError(null);
+    try {
+      const data = await diseaseService.getAllDiseases(refresh);
+      if (isMountedRef.current) {
+        setDiseases(data);
+      }
+      const cats = await diseaseService.getCategories();
+      if (isMountedRef.current) {
+        setPrimaryCategories(cats);
+      }
+      const subs = await diseaseService.getSubCategories();
+      if (isMountedRef.current) {
+        setSubCategories(subs);
+      }
+    } catch (err) {
+      console.error('Failed to load disease library:', err);
+      if (isMountedRef.current) {
+        setDiseaseError('Unable to load health library. Please check your network and try again.');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoadingDiseases(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    loadDiseases();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [loadDiseases]);
 
   // Load datasets when dataset tab is active or filters change
   useEffect(() => {
@@ -64,7 +105,7 @@ export default function ExplorePage() {
 
   // Filter diseases in library (supports multilingual search in English and Hindi)
   const filteredDiseases = useMemo(() => {
-    return DISEASES_DATABASE.filter(disease => {
+    return diseases.filter(disease => {
       const matchesPrimary =
         selectedPrimaryCategory === 'All Conditions' ||
         disease.categoryGroup === selectedPrimaryCategory;
@@ -78,7 +119,7 @@ export default function ExplorePage() {
 
       const matchesSearch =
         !q ||
-        disease.name.toLowerCase().includes(q) ||
+        disease.name?.toLowerCase().includes(q) ||
         localized?.name?.toLowerCase().includes(q) ||
         (disease.medicalName && disease.medicalName.toLowerCase().includes(q)) ||
         (localized?.medicalName && localized.medicalName.toLowerCase().includes(q)) ||
@@ -89,7 +130,7 @@ export default function ExplorePage() {
 
       return matchesPrimary && matchesSub && matchesSearch;
     });
-  }, [searchQuery, selectedPrimaryCategory, selectedSubCategory, translateDisease]);
+  }, [diseases, searchQuery, selectedPrimaryCategory, selectedSubCategory, translateDisease]);
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12">
@@ -114,14 +155,16 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      {/* Header Banner */}
+      {/* Header Banner - Fully dynamic count */}
       <div className="space-y-4 max-w-3xl">
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
           {t('explore.title', {}, 'Understand Your Health')}
         </h1>
 
         <p className="text-[19px] sm:text-[20px] text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
-          {t('explore.subtitle', { count: DISEASES_DATABASE.length }, `Evidence-based, medically verified overviews with high-resolution clinical presentation imagery across all ${DISEASES_DATABASE.length} conditions in the public health library.`)}
+          {isHindi
+            ? `सार्वजनिक स्वास्थ्य पुस्तकालय में सभी ${diseases.length || 97} स्वास्थ्य स्थितियों के लिए साक्ष्य-आधारित, चिकित्सकीय रूप से सत्यापित विस्तृत विवरण।`
+            : `Evidence-based, medically verified overviews with high-resolution clinical presentation imagery across all ${diseases.length || 97} conditions in the public health library.`}
         </p>
       </div>
 
@@ -193,34 +236,49 @@ export default function ExplorePage() {
             )}
           </div>
 
-          {/* Primary Category Tabs */}
+          {/* Primary Category Tabs with Dynamic Derivation */}
           <div className="space-y-3">
             <p className="text-[14px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               {t('explore.primaryCategories', {}, 'Categories')}
             </p>
             <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-              {PRIMARY_CATEGORIES.map(category => (
-                <button
-                  key={category}
-                  onClick={() => {
-                    setSelectedPrimaryCategory(category);
-                    setSelectedSubCategory('All');
-                  }}
-                  className={`px-5 py-2.5 rounded-2xl text-[15px] font-semibold shrink-0 transition-all cursor-pointer ${
-                    selectedPrimaryCategory === category
-                      ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20 active:scale-95'
-                      : 'glass-card text-slate-700 dark:text-slate-300 hover:border-cyan-500/50'
-                  }`}
-                >
-                  {translateCategory(category)}
-                </button>
-              ))}
+              {primaryCategories.map(category => {
+                const count = category === 'All Conditions'
+                  ? diseases.length
+                  : diseases.filter(d => d.categoryGroup === category).length;
+
+                return (
+                  <button
+                    key={category}
+                    onClick={() => {
+                      setSelectedPrimaryCategory(category);
+                      setSelectedSubCategory('All');
+                    }}
+                    className={`px-5 py-2.5 rounded-2xl text-[15px] font-semibold shrink-0 transition-all cursor-pointer flex items-center gap-2 ${
+                      selectedPrimaryCategory === category
+                        ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20 active:scale-95'
+                        : 'glass-card text-slate-700 dark:text-slate-300 hover:border-cyan-500/50'
+                    }`}
+                  >
+                    <span>{translateCategory(category)}</span>
+                    {count > 0 && (
+                      <span className={`text-[12px] px-2 py-0.5 rounded-full font-bold ${
+                        selectedPrimaryCategory === category
+                          ? 'bg-slate-950/20 text-slate-950'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Subcategory Pills */}
+          {/* Subcategory Pills with Dynamic Derivation */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {SUB_CATEGORIES.map(sub => (
+            {subCategories.map(sub => (
               <button
                 key={sub}
                 onClick={() => setSelectedSubCategory(sub)}
@@ -235,15 +293,47 @@ export default function ExplorePage() {
             ))}
           </div>
 
-          {/* Disease Cards Grid */}
+          {/* Disease Cards Grid / Loading / Error State */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <p className="text-[15px] text-slate-500 dark:text-slate-400 font-medium">
-                {t('explore.showingCount', { count: filteredDiseases.length }, `Showing ${filteredDiseases.length} conditions`)}
+                {t('explore.showingCount', { count: filteredDiseases.length }, `Showing ${filteredDiseases.length} of ${diseases.length} conditions`)}
               </p>
             </div>
 
-            {filteredDiseases.length === 0 ? (
+            {/* LOADING STATE */}
+            {isLoadingDiseases ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="glass-card rounded-3xl p-6 space-y-4 animate-pulse border border-slate-200 dark:border-slate-800">
+                    <div className="w-full h-48 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
+                    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
+                    <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
+                    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-full" />
+                    <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
+                  </div>
+                ))}
+              </div>
+            ) : diseaseError ? (
+              /* ERROR STATE */
+              <div className="p-12 text-center rounded-3xl glass-card space-y-4 border border-rose-500/30">
+                <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {isHindi ? 'डेटा लोड करने में असमर्थ' : 'Unable to Load Disease Library'}
+                </h3>
+                <p className="text-[16px] text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                  {diseaseError}
+                </p>
+                <button
+                  onClick={() => loadDiseases(true)}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-[15px] font-bold bg-cyan-400 text-slate-950 cursor-pointer shadow-xs active:scale-95"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>{isHindi ? 'पुनः प्रयास करें' : 'Retry'}</span>
+                </button>
+              </div>
+            ) : filteredDiseases.length === 0 ? (
+              /* EMPTY STATE */
               <div className="p-12 text-center rounded-3xl glass-card space-y-4">
                 <Info className="w-10 h-10 text-cyan-500 dark:text-cyan-400 mx-auto" />
                 <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
@@ -264,6 +354,7 @@ export default function ExplorePage() {
                 </button>
               </div>
             ) : (
+              /* ACTIVE CARDS GRID */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredDiseases.map(disease => {
                   const localized = translateDisease(disease);
@@ -338,151 +429,16 @@ export default function ExplorePage() {
       {activeTab === 'datasets' && (
         <div className="space-y-8">
           <div className="p-6 rounded-3xl glass-card border border-cyan-500/30 space-y-4">
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-              {isHindi ? 'आधिकारिक वैश्विक स्वास्थ्य डेटा खोजें' : 'Search Official Global Health Data'}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <input
-                type="text"
-                placeholder={isHindi ? 'डेटा खोजें...' : 'Search datasets...'}
-                value={datasetSearch}
-                onChange={e => setDatasetSearch(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <select
-                value={selectedCountry}
-                onChange={e => setSelectedCountry(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="All">{isHindi ? 'सभी देश (All Countries)' : 'All Countries'}</option>
-                <option value="India">India</option>
-                <option value="United States">United States</option>
-                <option value="Global">Global</option>
-              </select>
-              <select
-                value={selectedYear}
-                onChange={e => setSelectedYear(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="All">{isHindi ? 'सभी वर्ष (All Years)' : 'All Years'}</option>
-                <option value="2023">2023</option>
-                <option value="2022">2022</option>
-                <option value="2021">2021</option>
-              </select>
-              <select
-                value={selectedMetric}
-                onChange={e => setSelectedMetric(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl glass-card text-sm text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option value="All">{isHindi ? 'सभी मेट्रिक्स (All Metrics)' : 'All Metrics'}</option>
-                <option value="Reported Cases">{isHindi ? 'दर्ज मामले (Reported Cases)' : 'Reported Cases'}</option>
-                <option value="Estimated Cases">{isHindi ? 'अनुमानित मामले (Estimated Cases)' : 'Estimated Cases'}</option>
-                <option value="Incidence Rate">{isHindi ? 'घटना दर (Incidence Rate)' : 'Incidence Rate'}</option>
-                <option value="Prevalence Rate">{isHindi ? 'प्रसार दर (Prevalence Rate)' : 'Prevalence Rate'}</option>
-              </select>
-            </div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Database className="w-6 h-6 text-cyan-500" />
+              <span>{isHindi ? 'आधिकारिक वैश्विक एवं राष्ट्रीय स्वास्थ्य डेटा' : 'Official Global & National Health Surveillance'}</span>
+            </h2>
+            <p className="text-slate-600 dark:text-slate-300 text-[15px]">
+              {isHindi
+                ? 'विश्व स्वास्थ्य संगठन (WHO), भारत सरकार (data.gov.in / MoHFW), और यूएस सीडीसी (CDC) से प्रमाणित महामारी विज्ञान डेटा।'
+                : 'Empirical epidemiological datasets synchronized from WHO Global Health Observatory, India Open Government Data (MOHFW), and the CDC.'}
+            </p>
           </div>
-
-          {datasetsList.length === 0 ? (
-            <div className="p-12 text-center rounded-3xl glass-card border border-slate-200 dark:border-slate-800 space-y-3">
-              <Database className="w-10 h-10 text-slate-400 mx-auto opacity-60" />
-              <h4 className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                {isHindi ? 'कोई आधिकारिक डेटासेट नहीं मिला' : 'No Official Datasets Found'}
-              </h4>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                {isHindi
-                  ? 'अपनी खोज या फ़िल्टर मानदंड को बदलकर पुनः प्रयास करें।'
-                  : 'Try adjusting your search keywords, country, year, or metric filters.'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {datasetsList.map(item => (
-                <div
-                  key={item.id}
-                  className="p-6 rounded-2xl glass-card border border-slate-200/90 dark:border-slate-800/90 flex flex-col justify-between space-y-4 hover:border-cyan-500/40 transition-all duration-200 hover:shadow-xl shadow-xs"
-                >
-                  <div className="space-y-3">
-                    {/* Header Badges */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30">
-                        {item.source}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {item.isVerified && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span>{isHindi ? 'सत्यापित' : 'Verified'}</span>
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                          <Calendar className="w-3 h-3 opacity-60" />
-                          <span>{item.year}</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Disease & Title */}
-                    <div>
-                      <div className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-cyan-600 dark:text-cyan-400 mb-1">
-                        <Activity className="w-3.5 h-3.5" />
-                        <span>{item.diseaseName}</span>
-                      </div>
-                      <h4 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug">
-                        {item.datasetName || item.title}
-                      </h4>
-                    </div>
-
-                    {/* Highlight Metric Plate */}
-                    <div className="p-3.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 flex items-baseline justify-between gap-3">
-                      <div>
-                        <span className="text-[11px] uppercase tracking-wider font-extrabold text-slate-500 dark:text-slate-400 block">
-                          {item.metricType}
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black text-cyan-600 dark:text-cyan-400">
-                          {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
-                        </span>
-                      </div>
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300 text-right max-w-[55%]">
-                        {item.unit}
-                      </span>
-                    </div>
-
-                    {/* Definition */}
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                      {item.definition || item.description}
-                    </p>
-
-                    {/* Clinical Note if present */}
-                    {item.notes && (
-                      <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-300/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 leading-snug">
-                        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        <span>{item.notes}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Footer: Geography & External Source Link */}
-                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs gap-3">
-                    <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 truncate font-medium">
-                      <MapPin className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
-                      <span className="truncate">{item.country} • {item.region || 'National Total'}</span>
-                    </span>
-
-                    <a
-                      href={item.sourceUrl || item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-3d btn-3d-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition-colors shrink-0 cursor-pointer"
-                    >
-                      <span>{isHindi ? 'आधिकारिक स्रोत' : 'Source Link'}</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

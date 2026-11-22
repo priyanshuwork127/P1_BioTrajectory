@@ -21,11 +21,23 @@ import {
 } from "lucide-react";
 
 import { approvedDoctorService } from "../../services/approvedDoctorService";
-import { appointmentService } from "../../services/appointmentService";
+import { appointmentService, getGoogleMeetUrl, getMeetingUrlOverride } from "../../services/appointmentService";
 import { consultationService } from "../../services/consultationService";
 import DailyIframe from "@daily-co/daily-js";
 import { getPatientPriorityStatus, subscribeToPriorityChanges } from "../../services/patientPriorityService";
 import DisclaimerBanner from "../../components/common/DisclaimerBanner";
+
+function GoogleMeetIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 87.5 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M49.5 36L64.5 48V24L49.5 36Z" fill="#00832D" />
+      <path d="M0 51.5C0 57.299 4.701 62 10.5 62H49.5V41H0V51.5Z" fill="#0066DA" />
+      <path d="M49.5 41V10H10.5C4.701 10 0 14.701 0 20.5V41H49.5Z" fill="#E94235" />
+      <path d="M49.5 10H64.5V36L49.5 24V10Z" fill="#FFBA00" />
+      <path d="M64.5 36L87.5 53.5V18.5L64.5 36Z" fill="#00AC47" />
+    </svg>
+  );
+}
 
 function getLocalDate() {
   const now = new Date();
@@ -114,12 +126,26 @@ export default function DoctorConsultationPage() {
   const [historyError, setHistoryError] = useState("");
   const [historyFilter, setHistoryFilter] = useState("ALL");
 
-  // In-App Video Consultation (Daily Prebuilt)
+  // In-App Video Consultation (Google Meet & Daily)
+  const [copiedAptId, setCopiedAptId] = useState(null);
   const [activeVideoAppointment, setActiveVideoAppointment] = useState(null);
   const [patientCallPhase, setPatientCallPhase] = useState("idle"); // idle | joining | connected | ended | error
   const [patientCallError, setPatientCallError] = useState("");
   const patientCallContainerRef = React.useRef(null);
   const patientDailyFrameRef = React.useRef(null);
+
+  const handleCopyMeetLink = (aptId, url) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedAptId(aptId);
+      setTimeout(() => setCopiedAptId(null), 2000);
+    }).catch(() => {});
+  };
+
+  const handleOpenGoogleMeet = (appointment) => {
+    const meetUrl = appointment.meetingUrl || getMeetingUrlOverride(appointment.id) || getGoogleMeetUrl(appointment.id);
+    window.open(meetUrl, "_blank", "noopener,noreferrer");
+  };
 
   const handlePatientJoinCall = async (appointment) => {
     setActiveVideoAppointment(appointment);
@@ -942,62 +968,76 @@ export default function DoctorConsultationPage() {
 
                     {/* Video Consultation Action Card for Accepted Video Appointments */}
                     {appointment.status === "ACCEPTED" && appointment.type === "video" && (
-                      <div className="mt-5 p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="mt-5 p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-950/20 dark:to-blue-950/20 border border-teal-200 dark:border-teal-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div className="flex items-start gap-3">
-                          <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              appointment.callStatus === "ACTIVE"
-                                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 animate-pulse"
-                                : "bg-purple-100 dark:bg-purple-900/40 text-purple-600"
-                            }`}
-                          >
-                            <Video className="w-5 h-5" />
+                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm">
+                            <GoogleMeetIcon className="w-5 h-5" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-slate-900 dark:text-white text-sm">
-                                {appointment.callStatus === "ACTIVE"
-                                  ? isHindi
-                                    ? "डॉक्टर ने वीडियो परामर्श शुरू कर दिया है!"
-                                    : "Doctor has started the video consultation!"
-                                  : isHindi
-                                  ? "स्वीकृत वीडियो परामर्श"
-                                  : "Accepted Video Consultation"}
+                              <h4 className="font-bold text-slate-900 dark:text-white text-sm flex items-center gap-1.5">
+                                {isHindi ? "गूगल मीट वीडियो परामर्श" : "Google Meet Video Consultation"}
                               </h4>
                               {appointment.callStatus === "ACTIVE" && (
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                                  Live Now
+                                </span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
                               {appointment.callStatus === "ACTIVE"
                                 ? isHindi
-                                  ? "आपका डॉक्टर सुरक्षित वीडियो रूम में आपकी प्रतीक्षा कर रहा है।"
-                                  : "Your doctor is in the room waiting for you to join."
+                                  ? "डॉक्टर गूगल मीट रूम में उपस्थित हैं! कृपया नीचे क्लिक करके मीटिंग जॉइन करें।"
+                                  : "Doctor is in Google Meet room! Click below to join the live video session."
                                 : isHindi
-                                ? "जैसे ही डॉक्टर कॉल शुरू करेंगे, यहां 'जॉइन' बटन लाइव हो जाएगा।"
-                                : "When your doctor clicks Start, the join button will activate in real time."}
+                                ? "स्वीकृत परामर्श — मीटिंग लिंक नीचे उपलब्ध है। समय होने पर गूगल मीट खोलें।"
+                                : "Accepted appointment — Google Meet room link is ready."}
+                            </p>
+                            <p className="text-[11px] font-mono text-teal-600 dark:text-teal-400 mt-1">
+                              {appointment.meetingUrl || getMeetingUrlOverride(appointment.id) || getGoogleMeetUrl(appointment.id)}
                             </p>
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => handlePatientJoinCall(appointment)}
-                          className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all shrink-0 ${
-                            appointment.callStatus === "ACTIVE"
-                              ? "bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse"
-                              : "bg-purple-600 hover:bg-purple-700 text-white"
-                          }`}
-                        >
-                          <Video className="w-4 h-4" />
-                          {appointment.callStatus === "ACTIVE"
-                            ? isHindi
-                              ? "परामर्श में शामिल हों (Join Live Call)"
-                              : "Join Live Consultation"
-                            : isHindi
-                            ? "परामर्श कक्ष में प्रवेश करें"
-                            : "Join Consultation Room"}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMeetLink(appointment.id, appointment.meetingUrl || getMeetingUrlOverride(appointment.id) || getGoogleMeetUrl(appointment.id))}
+                            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5"
+                          >
+                            {copiedAptId === appointment.id ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                {isHindi ? "कॉपी हो गया" : "Copied!"}
+                              </>
+                            ) : (
+                              <>
+                                <ClipboardList className="w-3.5 h-3.5" />
+                                {isHindi ? "लिंक कॉपी करें" : "Copy Link"}
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenGoogleMeet(appointment)}
+                            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${
+                              appointment.callStatus === "ACTIVE"
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse"
+                                : "bg-teal-600 hover:bg-teal-700 text-white"
+                            }`}
+                          >
+                            <GoogleMeetIcon className="w-4 h-4" />
+                            {appointment.callStatus === "ACTIVE"
+                              ? isHindi
+                                ? "गूगल मीट में जुड़ें (Join Now)"
+                                : "Join Google Meet Now"
+                              : isHindi
+                              ? "गूगल मीट खोलें"
+                              : "Open Google Meet"}
+                          </button>
+                        </div>
                       </div>
                     )}
 

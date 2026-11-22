@@ -26,8 +26,26 @@ import {
 import { useDoctorAuth } from "../../context/DoctorAuthContext";
 import { useLanguage } from "../../context/LanguageContext";
 import { doctorPatientService } from "../../services/doctorPatientService";
-import { appointmentService, setCallStatusOverride } from "../../services/appointmentService";
+import {
+  appointmentService,
+  setCallStatusOverride,
+  getGoogleMeetUrl,
+  setMeetingUrlOverride,
+  getMeetingUrlOverride
+} from "../../services/appointmentService";
 import { consultationService } from "../../services/consultationService";
+
+function GoogleMeetIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg className={className} viewBox="0 0 87.5 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M49.5 36L64.5 48V24L49.5 36Z" fill="#00832D" />
+      <path d="M0 51.5C0 57.299 4.701 62 10.5 62H49.5V41H0V51.5Z" fill="#0066DA" />
+      <path d="M49.5 41V10H10.5C4.701 10 0 14.701 0 20.5V41H49.5Z" fill="#E94235" />
+      <path d="M49.5 10H64.5V36L49.5 24V10Z" fill="#FFBA00" />
+      <path d="M64.5 36L87.5 53.5V18.5L64.5 36Z" fill="#00AC47" />
+    </svg>
+  );
+}
 
 export default function DoctorVideoConsultationPage() {
   const [searchParams] = useSearchParams();
@@ -45,8 +63,11 @@ export default function DoctorVideoConsultationPage() {
   const [error, setError] = useState("");
   const [permissionError, setPermissionError] = useState("");
 
-  // Daily Consultation State
-  const [dailyStatus, setDailyStatus] = useState({ isConfigured: false, message: "" });
+  // Consultation State (Google Meet & Daily)
+  const [providerMode, setProviderMode] = useState("google_meet"); // "google_meet" | "daily"
+  const [customMeetUrl, setCustomMeetUrl] = useState("");
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [dailyStatus, setDailyStatus] = useState({ isConfigured: true, provider: "google_meet", message: "" });
   const [callPhase, setCallPhase] = useState("idle"); // idle | starting | joining | connected | ended | error
   const [activeRoomUrl, setActiveRoomUrl] = useState("");
 
@@ -55,6 +76,65 @@ export default function DoctorVideoConsultationPage() {
 
   const [newMessage, setNewMessage] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
+
+  // Compute current Google Meet URL for selected target appointment
+  const currentMeetUrl = useMemo(() => {
+    if (!targetAppointment?.id) return "";
+    return getGoogleMeetUrl(targetAppointment.id, customMeetUrl);
+  }, [targetAppointment?.id, customMeetUrl]);
+
+  // Copy Google Meet link with clipboard feedback
+  const handleCopyMeetLink = (url) => {
+    const linkToCopy = url || currentMeetUrl || activeRoomUrl;
+    if (!linkToCopy) return;
+    navigator.clipboard.writeText(linkToCopy).then(() => {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }).catch(() => {});
+  };
+
+  // Start Google Meet Consultation
+  const handleStartGoogleMeet = async () => {
+    if (!targetAppointment?.id) {
+      setError(isHindi ? "कोई वैध अपॉइंटमेंट नहीं मिला।" : "No valid appointment found.");
+      return;
+    }
+
+    if (!isEligibleToStart) {
+      setError(
+        isHindi
+          ? "केवल स्वीकृत वीडियो अपॉइंटमेंट के लिए कॉल शुरू की जा सकती है।"
+          : "Consultations can only be started for accepted video appointments."
+      );
+      return;
+    }
+
+    setError("");
+    setPermissionError("");
+    setCallPhase("starting");
+
+    try {
+      const urlToOpen = currentMeetUrl;
+      const result = await consultationService.startConsultation(
+        targetAppointment.id,
+        "google_meet",
+        urlToOpen
+      );
+
+      const finalUrl = result.roomUrl || urlToOpen;
+      setActiveRoomUrl(finalUrl);
+      setMeetingUrlOverride(targetAppointment.id, finalUrl);
+      setCallStatusOverride(targetAppointment.id, "ACTIVE");
+      setCallPhase("connected");
+
+      // Open Google Meet in new tab/window
+      window.open(finalUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error("Failed to launch Google Meet:", err);
+      setError(err?.message || "Failed to launch Google Meet consultation.");
+      setCallPhase("error");
+    }
+  };
 
   // Check Daily backend configuration on mount
   useEffect(() => {
@@ -354,17 +434,10 @@ export default function DoctorVideoConsultationPage() {
               </span>
             )}
 
-            {dailyStatus.isConfigured ? (
-              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Daily Prebuilt Ready
-              </span>
-            ) : (
-              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Provider Setup Required
-              </span>
-            )}
+            <span className="text-xs font-semibold px-3 py-1 rounded-full bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400 flex items-center gap-1.5 shadow-sm">
+              <GoogleMeetIcon className="w-3.5 h-3.5" />
+              Google Meet Consultation Ready
+            </span>
           </div>
 
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
@@ -373,8 +446,8 @@ export default function DoctorVideoConsultationPage() {
 
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             {isHindi
-              ? "स्वीकृत वीडियो नियुक्तियों के लिए रीयल-टाइम परामर्श शुरू करें।"
-              : "Start real-time in-app video consultations with accepted patients using Daily Prebuilt."}
+              ? "स्वीकृत वीडियो नियुक्तियों के लिए गूगल मीट (Google Meet) के माध्यम से सुरक्षित परामर्श संचालित करें।"
+              : "Conduct secure, clinical video consultations via Google Meet with accepted patients."}
           </p>
         </div>
 
@@ -389,29 +462,22 @@ export default function DoctorVideoConsultationPage() {
         </button>
       </div>
 
-      {/* Provider missing credentials alert */}
-      {!dailyStatus.isConfigured && (
-        <div className="rounded-2xl p-5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <h2 className="font-bold text-sm text-amber-900 dark:text-amber-200">
-                {t("consultation.dailyNotConfigured", {}, "Daily.co video consultation provider is not configured.")}
-              </h2>
-              <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 mt-1">
-                {t(
-                  "consultation.setupInstructions",
-                  {},
-                  "To enable real Daily video calls, set DAILY_API_KEY in backend/.env. Calls remain gracefully disabled until configured."
-                )}
-              </p>
-              <div className="mt-2 text-xs font-mono bg-amber-100/70 dark:bg-amber-900/40 p-2 rounded-lg text-amber-900 dark:text-amber-200">
-                DAILY_API_KEY=your_daily_api_key_here
-              </div>
-            </div>
+      {/* Google Meet Info Banner */}
+      <div className="rounded-2xl p-4 bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-950/20 dark:to-blue-950/20 border border-teal-200/80 dark:border-teal-800/50 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-teal-200 dark:border-teal-800 flex items-center justify-center shrink-0">
+            <GoogleMeetIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="font-bold text-sm text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
+              Google Meet Telemedicine Integration
+            </h2>
+            <p className="text-xs text-teal-800/80 dark:text-teal-300/80 mt-0.5">
+              Clinical consultations launch securely in dedicated Google Meet windows with automatic meeting links and real-time status synchronization.
+            </p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Camera / Mic Permission Alert */}
       {permissionError && (
@@ -568,20 +634,80 @@ export default function DoctorVideoConsultationPage() {
                   Choose an appointment from the roster to start or join a consultation.
                 </p>
               </div>
+            ) : callPhase === "connected" && providerMode === "google_meet" ? (
+              <div className="aspect-video rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-teal-950/80 border border-teal-500/30 flex flex-col items-center justify-center text-center p-6 relative overflow-hidden">
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Google Meet Active
+                  </span>
+                </div>
+
+                <div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center p-3 mb-4 shadow-xl">
+                  <GoogleMeetIcon className="w-12 h-12" />
+                </div>
+
+                <h3 className="text-xl font-bold text-white">Google Meet Consultation Live</h3>
+                <p className="text-xs text-teal-300 mt-1">
+                  Patient: <span className="font-semibold text-white">{patientName}</span> ({selectedPatient?.patientId})
+                </p>
+
+                <div className="mt-4 px-4 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-teal-300 flex items-center gap-2">
+                  <span>{activeRoomUrl || currentMeetUrl}</span>
+                </div>
+
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => window.open(activeRoomUrl || currentMeetUrl, "_blank", "noopener,noreferrer")}
+                    className="px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
+                  >
+                    <GoogleMeetIcon className="w-4 h-4" />
+                    Return to Google Meet Window
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyMeetLink(activeRoomUrl || currentMeetUrl)}
+                    className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 flex items-center gap-2 transition-all"
+                  >
+                    {copiedLink ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardList className="w-4 h-4" />
+                        Copy Patient Link
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleEndConsultation}
+                    className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center gap-2 transition-all"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                    End Consultation
+                  </button>
+                </div>
+              </div>
             ) : (
               <div>
                 {/* Embed Daily Call Frame Container */}
                 <div
                   ref={callContainerRef}
                   className={`aspect-video rounded-2xl overflow-hidden bg-slate-950 transition-all ${
-                    callPhase === "connected" || callPhase === "joining" ? "block min-h-[460px]" : "hidden"
+                    callPhase === "connected" && providerMode === "daily" ? "block min-h-[460px]" : "hidden"
                   }`}
                 />
 
                 {/* Placeholder view when call is not active */}
-                {callPhase !== "connected" && callPhase !== "joining" && (
+                {callPhase !== "connected" && (
                   <div className="aspect-video rounded-2xl bg-slate-950 flex flex-col items-center justify-center text-center p-6">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center text-white text-3xl font-bold">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-teal-600 to-blue-600 flex items-center justify-center text-white text-3xl font-bold">
                       {patientName.charAt(0).toUpperCase()}
                     </div>
 
@@ -606,7 +732,7 @@ export default function DoctorVideoConsultationPage() {
                       {isEligibleToStart ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          Ready for Video Consultation
+                          Ready for Google Meet Video Consultation
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold">
@@ -628,51 +754,77 @@ export default function DoctorVideoConsultationPage() {
                     {callPhase === "connected" ? (
                       <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        Consultation in progress via Daily Prebuilt
+                        Consultation in progress via Google Meet
                       </span>
-                    ) : callPhase === "starting" || callPhase === "joining" ? (
-                      <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    ) : callPhase === "starting" ? (
+                      <span className="text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Initializing secure room & issuing meeting token...
+                        Launching Google Meet consultation...
                       </span>
                     ) : (
-                      <span>
-                        {isEligibleToStart
-                          ? "Doctor action: Start consultation to open the video room."
-                          : "Calls can only be started for accepted video appointments."}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Google Meet Room: <code className="text-teal-600 dark:text-teal-400 font-mono text-[11px]">{currentMeetUrl}</code>
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          Click "Start Google Meet Consultation" to launch the room and notify the patient.
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    {callPhase === "connected" || callPhase === "joining" ? (
-                      <button
-                        type="button"
-                        onClick={handleEndConsultation}
-                        className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold flex items-center gap-2 shadow-sm transition-all"
-                      >
-                        <PhoneOff className="w-4 h-4" />
-                        {t("consultation.endConsultation", {}, "End Consultation")}
-                      </button>
+                  <div className="flex items-center gap-2.5">
+                    {callPhase === "connected" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMeetLink(activeRoomUrl || currentMeetUrl)}
+                          className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5"
+                        >
+                          {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                          {copiedLink ? "Copied" : "Copy Link"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleEndConsultation}
+                          className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-2 shadow-sm transition-all"
+                        >
+                          <PhoneOff className="w-4 h-4" />
+                          End Call
+                        </button>
+                      </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleStartConsultation}
-                        disabled={!isEligibleToStart || callPhase === "starting" || !dailyStatus.isConfigured}
-                        className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
-                      >
-                        {callPhase === "starting" ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            {t("consultation.startingConsultation", {}, "Starting...")}
-                          </>
-                        ) : (
-                          <>
-                            <PhoneCall className="w-4 h-4" />
-                            {t("consultation.startConsultation", {}, "Start Consultation")}
-                          </>
-                        )}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyMeetLink(currentMeetUrl)}
+                          disabled={!targetAppointment}
+                          className="px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                          {copiedLink ? "Copied Link" : "Copy Meet Link"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleStartGoogleMeet}
+                          disabled={!isEligibleToStart || callPhase === "starting"}
+                          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 text-white text-xs font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all"
+                        >
+                          {callPhase === "starting" ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Launching...
+                            </>
+                          ) : (
+                            <>
+                              <GoogleMeetIcon className="w-4 h-4" />
+                              Start Google Meet Consultation
+                            </>
+                          )}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

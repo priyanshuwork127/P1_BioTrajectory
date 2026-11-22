@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { DISEASES_DATABASE } from '../../data/diseasesData';
+import { diseaseService } from '../../services/diseaseService';
 import { DatasetService } from '../../services/datasetService';
 import { getDiseaseImages } from '../../data/diseaseImages';
 import { useLanguage } from '../../context/LanguageContext';
@@ -22,7 +23,27 @@ import LanguageSwitcher from '../../components/common/LanguageSwitcher';
 export default function DiseaseDetailPage() {
   const { id } = useParams();
   const { t, translateDisease, translateCategory, isHindi } = useLanguage();
-  const disease = DISEASES_DATABASE.find(d => d.id === id);
+  
+  const [disease, setDisease] = useState(() => DISEASES_DATABASE.find(d => d.id === id) || null);
+  const [loadingDisease, setLoadingDisease] = useState(!disease);
+
+  useEffect(() => {
+    let mounted = true;
+    diseaseService.getDiseaseById(id).then((found) => {
+      if (mounted && found) {
+        setDisease(found);
+      }
+      if (mounted) {
+        setLoadingDisease(false);
+      }
+    }).catch(() => {
+      if (mounted) setLoadingDisease(false);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
   const localized = disease ? translateDisease(disease) : null;
   const diseaseImages = disease ? getDiseaseImages(disease.id) : null;
 
@@ -65,6 +86,17 @@ export default function DiseaseDetailPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (loadingDisease) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-24 text-center space-y-6">
+        <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-[18px] text-slate-600 dark:text-slate-400">
+          {isHindi ? 'चिकित्सीय मार्गदर्शिका लोड हो रही है...' : 'Loading clinical guide...'}
+        </p>
+      </div>
+    );
+  }
 
   if (!disease || !localized) {
     return (
