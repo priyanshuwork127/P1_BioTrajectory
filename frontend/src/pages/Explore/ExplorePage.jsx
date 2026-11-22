@@ -121,7 +121,7 @@ export default function ExplorePage() {
         </h1>
 
         <p className="text-[19px] sm:text-[20px] text-slate-600 dark:text-slate-300 leading-relaxed font-normal">
-          {t('explore.subtitle', {}, 'Evidence-based, medically verified overviews with high-resolution clinical presentation imagery for 35 conditions.')}
+          {t('explore.subtitle', { count: DISEASES_DATABASE.length }, `Evidence-based, medically verified overviews with high-resolution clinical presentation imagery across all ${DISEASES_DATABASE.length} conditions in the public health library.`)}
         </p>
       </div>
 

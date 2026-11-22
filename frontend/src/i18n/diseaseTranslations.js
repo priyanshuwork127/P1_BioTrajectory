@@ -8,6 +8,18 @@
 export const CATEGORY_TRANSLATIONS = {
   'All Conditions': 'सभी स्थितियां (All Conditions)',
   'Common Illnesses': 'सामान्य बीमारियां (Common Illnesses)',
+  'Cardiovascular & Heart': 'हृदय एवं परिसंचरण (Cardiovascular & Heart)',
+  'Endocrine & Hormones': 'अंतःस्रावी एवं हार्मोन (Endocrine & Hormones)',
+  'Neurology & Brain': 'न्यूरोलॉजी एवं मस्तिष्क (Neurology & Brain)',
+  'Respiratory & Lungs': 'श्वसन एवं फेफड़े (Respiratory & Lungs)',
+  'Digestive & Liver': 'पाचन एवं यकृत (Digestive & Liver)',
+  'Kidneys & Urinary': 'गुर्दे एवं मूत्र प्रणाली (Kidneys & Urinary)',
+  'Infectious & Tropical': 'संक्रामक एवं उष्णकटिबंधीय (Infectious & Tropical)',
+  'Bones & Autoimmune': 'अस्थि एवं स्वप्रतिरक्षी (Bones & Autoimmune)',
+  'Mental Health': 'मानसिक स्वास्थ्य (Mental Health)',
+  'Skin & Dermatology': 'त्वचा एवं डर्मेटोलॉजी (Skin & Dermatology)',
+  'Blood & Hematology': 'रक्त एवं हेमेटोलॉजी (Blood & Hematology)',
+  'Cancer & Oncology': 'कैंसर एवं ऑन्कोलॉजी (Cancer & Oncology)',
   'Other Health Problems': 'अन्य स्वास्थ्य समस्याएं (Other Health Problems)',
   'Cancer Types': 'कैंसर के प्रकार (Cancer Types)'
 };
@@ -20,9 +32,17 @@ export const SUB_CATEGORY_TRANSLATIONS = {
   'Heart & Circulation': 'हृदय एवं परिसंचरण (Heart & Circulation)',
   'Blood Sugar & Hormones': 'ब्लड शुगर एवं हार्मोन्स (Blood Sugar & Hormones)',
   'Kidneys & Urinary': 'गुर्दे एवं मूत्र प्रणाली (Kidneys & Urinary)',
+  'Brain & Nervous System': 'मस्तिष्क एवं तंत्रिका तंत्र (Brain & Nervous System)',
+  'Bones & Joints': 'हड्डियां एवं जोड़ (Bones & Joints)',
+  'Skin & Soft Tissue': 'त्वचा एवं कोमल ऊतक (Skin & Soft Tissue)',
+  'Mental Wellbeing': 'मानसिक कल्याण (Mental Wellbeing)',
+  'Blood & Hematology': 'रक्त एवं हेमेटोलॉजी (Blood & Hematology)',
   'Blood & Liver': 'रक्त एवं यकृत (Blood & Liver)',
+  'Solid Tumors': 'ठोस ट्यूमर (Solid Tumors)',
   'Common Cancers': 'प्रमुख कैंसर (Common Cancers)',
   'Digestive Cancers': 'पाचन तंत्र के कैंसर (Digestive Cancers)',
+  'Blood Cancers': 'रक्त कैंसर (Blood Cancers)',
+  'Infections & Viruses': 'संक्रमण एवं वायरस (Infections & Viruses)',
   'Other Cancers': 'अन्य कैंसर (Other Cancers)'
 };
 

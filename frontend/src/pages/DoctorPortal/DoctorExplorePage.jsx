@@ -38,12 +38,25 @@ export default function DoctorExplorePage() {
   const [copiedKey, setCopiedKey] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
 
-  const categories = [
-    { id: 'all', label: isHi ? 'सभी 35 रोग (All 35)' : 'All Conditions (35)', count: 35 },
-    { id: 'common', label: isHi ? 'सामान्य बीमारियाँ (Common)' : 'Common Illnesses (12)', count: 12 },
-    { id: 'chronic', label: isHi ? 'क्रोनिक व लाइफस्टाइल (Chronic)' : 'Chronic & Lifestyle (7)', count: 7 },
-    { id: 'cancer', label: isHi ? 'ऑन्कोलॉजी / कैंसर (Cancer)' : 'Oncology / Cancers (16)', count: 16 },
-  ];
+  const categories = useMemo(() => {
+    const list = GLOBAL_DISEASE_LIST;
+    return [
+      { id: 'all', label: isHi ? `सभी स्थितियां (${list.length})` : `All Conditions (${list.length})`, count: list.length },
+      { id: 'cardiovascular', label: isHi ? 'हृदय एवं परिसंचरण' : 'Cardiovascular & Heart', count: list.filter(d => d.category === 'Cardiovascular & Heart' || d.category === 'Heart & Circulation').length },
+      { id: 'common', label: isHi ? 'सामान्य बीमारियाँ' : 'Common Illnesses', count: list.filter(d => d.category === 'Common Illnesses').length },
+      { id: 'endocrine', label: isHi ? 'हार्मोन व मेटाबॉलिज्म' : 'Endocrine & Metabolic', count: list.filter(d => d.category === 'Endocrine & Hormones').length },
+      { id: 'neurology', label: isHi ? 'न्यूरोलॉजी व मस्तिष्क' : 'Neurology & Brain', count: list.filter(d => d.category === 'Neurology & Brain').length },
+      { id: 'respiratory', label: isHi ? 'श्वसन व फेफड़े' : 'Respiratory & Pulmonary', count: list.filter(d => d.category === 'Respiratory & Lungs').length },
+      { id: 'digestive', label: isHi ? 'पाचन व यकृत' : 'Digestive & Liver', count: list.filter(d => d.category === 'Digestive & Liver').length },
+      { id: 'renal', label: isHi ? 'गुर्दे व मूत्र प्रणाली' : 'Kidneys & Urinary', count: list.filter(d => d.category === 'Kidneys & Urinary').length },
+      { id: 'infectious', label: isHi ? 'संक्रामक व उष्णकटिबंधीय' : 'Infectious & Tropical', count: list.filter(d => d.category === 'Infectious & Tropical').length },
+      { id: 'musculoskeletal', label: isHi ? 'अस्थि व स्वप्रतिरक्षी' : 'Musculoskeletal & Autoimmune', count: list.filter(d => d.category === 'Bones & Autoimmune').length },
+      { id: 'mental', label: isHi ? 'मानसिक स्वास्थ्य' : 'Mental Health', count: list.filter(d => d.category === 'Mental Health').length },
+      { id: 'skin', label: isHi ? 'त्वचा व डर्मेटोलॉजी' : 'Dermatology & Skin', count: list.filter(d => d.category === 'Skin & Dermatology').length },
+      { id: 'cancer', label: isHi ? 'ऑन्कोलॉजी / कैंसर' : 'Oncology & Cancer', count: list.filter(d => d.category === 'Cancer Types' || d.category === 'Cancer & Oncology').length },
+      { id: 'blood', label: isHi ? 'रक्त व हेमेटोलॉजी' : 'Blood & Hematology', count: list.filter(d => d.category === 'Blood & Hematology').length },
+    ];
+  }, [isHi]);
 
   const pillarFilters = [
     { id: 'all', label: isHi ? 'तीनों स्तंभ (All 3 Pillars)' : 'All 3 Clinical Pillars', icon: Layers },
@@ -56,8 +69,19 @@ export default function DoctorExplorePage() {
     return GLOBAL_DISEASE_LIST.filter((d) => {
       // Category filter
       if (selectedCategory === 'common' && d.category !== 'Common Illnesses') return false;
+      if (selectedCategory === 'cardiovascular' && d.category !== 'Cardiovascular & Heart' && d.category !== 'Heart & Circulation') return false;
+      if (selectedCategory === 'endocrine' && d.category !== 'Endocrine & Hormones') return false;
+      if (selectedCategory === 'neurology' && d.category !== 'Neurology & Brain') return false;
+      if (selectedCategory === 'respiratory' && d.category !== 'Respiratory & Lungs') return false;
+      if (selectedCategory === 'digestive' && d.category !== 'Digestive & Liver') return false;
+      if (selectedCategory === 'renal' && d.category !== 'Kidneys & Urinary') return false;
+      if (selectedCategory === 'infectious' && d.category !== 'Infectious & Tropical') return false;
+      if (selectedCategory === 'musculoskeletal' && d.category !== 'Bones & Autoimmune') return false;
+      if (selectedCategory === 'mental' && d.category !== 'Mental Health') return false;
+      if (selectedCategory === 'skin' && d.category !== 'Skin & Dermatology') return false;
+      if (selectedCategory === 'cancer' && d.category !== 'Cancer Types' && d.category !== 'Cancer & Oncology') return false;
+      if (selectedCategory === 'blood' && d.category !== 'Blood & Hematology') return false;
       if (selectedCategory === 'chronic' && d.category !== 'Other Health Problems') return false;
-      if (selectedCategory === 'cancer' && d.category !== 'Cancer Types') return false;
 
       // Search matching across all clinical dimensions
       if (!searchTerm.trim()) return true;
@@ -185,15 +209,15 @@ export default function DoctorExplorePage() {
             </h1>
             <p className="text-blue-100/80 text-xs sm:text-sm mt-2 leading-relaxed">
               {isHi
-                ? '35 प्रमुख बीमारियों के लिए आवश्यक जाँचें (Required Tests), लक्षण (Symptoms), और साक्ष्य-आधारित दवा नुस्खे (Evidence-Based Prescriptions) सीधे एक ही स्थान पर उपलब्ध।'
-                : 'Direct access to Required Diagnostic Tests, Hallmark & Red-Flag Symptoms, and Evidence-Based Pharmacotherapy Prescriptions across all 35 health conditions.'}
+                ? `${GLOBAL_DISEASE_LIST.length} प्रमुख बीमारियों के लिए आवश्यक जाँचें (Required Tests), लक्षण (Symptoms), और साक्ष्य-आधारित दवा नुस्खे (Evidence-Based Prescriptions) सीधे एक ही स्थान पर उपलब्ध।`
+                : `Direct access to Required Diagnostic Tests, Hallmark & Red-Flag Symptoms, and Evidence-Based Pharmacotherapy Prescriptions across all ${GLOBAL_DISEASE_LIST.length} health conditions.`}
             </p>
           </div>
 
           {/* Quick Stats Badges */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
-              <div className="text-blue-300 font-bold text-lg sm:text-xl">35 Diseases</div>
+              <div className="text-blue-300 font-bold text-lg sm:text-xl">{GLOBAL_DISEASE_LIST.length} Conditions</div>
               <div className="text-slate-300 text-[11px]">Full Clinical Datasets</div>
             </div>
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm">
@@ -284,7 +308,7 @@ export default function DoctorExplorePage() {
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
           <div className="flex items-center gap-2">
             <span>
-              Showing <strong className="text-slate-900 dark:text-white">{filteredDiseases.length}</strong> of 35 clinical datasets
+              Showing <strong className="text-slate-900 dark:text-white">{filteredDiseases.length}</strong> of {GLOBAL_DISEASE_LIST.length} clinical datasets
             </span>
             {searchTerm && (
               <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 text-[11px] font-medium">
